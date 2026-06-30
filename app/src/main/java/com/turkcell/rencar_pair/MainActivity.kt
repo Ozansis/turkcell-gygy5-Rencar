@@ -4,13 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import com.turkcell.rencar_pair.feature.onboarding.OnboardingRoute
 import com.turkcell.rencar_pair.ui.theme.RenCarPairTheme
 
 class MainActivity : ComponentActivity() {
@@ -19,29 +13,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             RenCarPairTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                OnboardingRoute(
+                    onNavigateToHome  = { /* TODO: NavHost ile HomeRoute'a yonlendir */ },
+                    onNavigateToLogin = { /* TODO: NavHost ile LoginRoute'a yonlendir */ }
+                )
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    RenCarPairTheme {
-        Greeting("Android")
     }
 }
