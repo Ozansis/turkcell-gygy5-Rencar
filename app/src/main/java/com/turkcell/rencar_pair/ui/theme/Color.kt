@@ -15,3 +15,6 @@ val BackgroundLight      = Color(0xFFEEF2F9)
 val Dark300              = Color(0xFF0D0F14)
 val Dark100              = Color(0xFF1A1C23)
 val InactiveIndicatorDark = Color(0xFF374151)
+
+val SurfaceVariantLight = Color(0xFFF3F4F6)
+val SurfaceVariantDark  = Color(0xFF13151A)

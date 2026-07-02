@@ -14,6 +14,7 @@ private val LightColorScheme = lightColorScheme(
     onBackground     = Neutral900,
     surface          = Color.White,
     onSurface        = Neutral900,
+    surfaceVariant   = SurfaceVariantLight,
     onSurfaceVariant = Gray500,
     outline          = Gray300
 )
@@ -25,6 +26,7 @@ private val DarkColorScheme = darkColorScheme(
     onBackground     = Color(0xFFF9FAFB),
     surface          = Dark100,
     onSurface        = Color(0xFFF9FAFB),
+    surfaceVariant   = SurfaceVariantDark,
     onSurfaceVariant = Gray400,
     outline          = InactiveIndicatorDark
 )
