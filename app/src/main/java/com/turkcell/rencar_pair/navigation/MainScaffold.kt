@@ -2,8 +2,6 @@ package com.turkcell.rencar_pair.navigation
 
 import android.net.http.SslCertificate.restoreState
 import android.net.http.SslCertificate.saveState
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -14,7 +12,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -24,6 +21,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.turkcell.rencar_pair.feature.history.HistoryRoute
 import com.turkcell.rencar_pair.feature.home.HomeScreen
+import com.turkcell.rencar_pair.feature.profile.ProfileRoute
 import com.turkcell.rencar_pair.feature.wallet.WalletRoute
 
 private val bottomNavItems = listOf(
@@ -94,21 +92,7 @@ fun MainScaffold() {
             composable(BottomNavItem.Map.route)      { HomeScreen() }
             composable(BottomNavItem.History.route)  { HistoryRoute() }
             composable(BottomNavItem.Listings.route) { WalletRoute() }
-            composable(BottomNavItem.Profile.route)  { TabPlaceholder("Profil") }
+            composable(BottomNavItem.Profile.route)  { ProfileRoute() }
         }
-    }
-}
-
-@Composable
-private fun TabPlaceholder(title: String) {
-    Box(
-        modifier         = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text  = "$title - Yakında",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground
-        )
     }
 }

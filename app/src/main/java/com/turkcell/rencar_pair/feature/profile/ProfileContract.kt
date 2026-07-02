@@ -1,0 +1,35 @@
+package com.turkcell.rencar_pair.feature.profile
+
+object ProfileContract {
+
+    data class State(
+        val userName: String = "",
+        val phoneNumber: String = "",
+        val license: LicenseVerification? = null,
+        val isLoading: Boolean = false
+    )
+
+    sealed interface Intent {
+        data object EditProfileClicked      : Intent
+        data object PaymentMethodsClicked   : Intent
+        data object SettingsClicked         : Intent
+        data object HelpClicked             : Intent
+        data object InviteClicked           : Intent
+        data object SignOutClicked          : Intent
+    }
+
+    sealed interface Effect {
+        data object NavigateToEditProfile      : Effect
+        data object NavigateToPaymentMethods   : Effect
+        data object NavigateToSettings         : Effect
+        data object NavigateToHelp             : Effect
+        data object NavigateToInvite           : Effect
+        data object NavigateToLogin            : Effect
+    }
+}
+
+data class LicenseVerification(
+    val isVerified: Boolean,
+    val licenseClass: String,
+    val statusLabel: String
+)
