@@ -22,6 +22,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.turkcell.rencar_pair.feature.history.HistoryRoute
 import com.turkcell.rencar_pair.feature.home.HomeScreen
 
 private val bottomNavItems = listOf(
@@ -90,7 +91,7 @@ fun MainScaffold() {
             modifier         = Modifier.padding(innerPadding)
         ) {
             composable(BottomNavItem.Map.route)      { HomeScreen() }
-            composable(BottomNavItem.History.route)  { TabPlaceholder("Geçmiş") }
+            composable(BottomNavItem.History.route)  { HistoryRoute() }
             composable(BottomNavItem.Listings.route) { TabPlaceholder("Cüzdan") }
             composable(BottomNavItem.Profile.route)  { TabPlaceholder("Profil") }
         }
