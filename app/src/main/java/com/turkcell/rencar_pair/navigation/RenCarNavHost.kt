@@ -6,14 +6,20 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.turkcell.rencar_pair.feature.auth.confirmation.ConfirmationRoute
+import com.turkcell.rencar_pair.feature.auth.license.LicenseRoute
 import com.turkcell.rencar_pair.feature.auth.login.LoginRoute
 import com.turkcell.rencar_pair.feature.auth.otp.OtpRoute
+import com.turkcell.rencar_pair.feature.auth.selfie.SelfieRoute
 import com.turkcell.rencar_pair.feature.onboarding.OnboardingRoute
 
 private object RenCarDestinations {
     const val ONBOARDING = "onboarding"
     const val LOGIN = "login"
     const val OTP = "otp/{phoneNumber}"
+    const val LICENSE_VERIFICATION = "license-verification"
+    const val SELFIE_VERIFICATION = "selfie-verification"
+    const val CONFIRMATION = "confirmation"
     const val HOME = "home"
 
     fun otpRoute(phoneNumber: String) = "otp/$phoneNumber"
@@ -57,6 +63,33 @@ fun RenCarNavHost() {
             val phoneNumber = backStackEntry.arguments?.getString("phoneNumber").orEmpty()
             OtpRoute(
                 phoneNumber = phoneNumber,
+                onNavigateToHome = {
+                    navController.navigate(RenCarDestinations.LICENSE_VERIFICATION)
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(RenCarDestinations.LICENSE_VERIFICATION) {
+            LicenseRoute(
+                onNavigateToHome = {
+                    navController.navigate(RenCarDestinations.SELFIE_VERIFICATION)
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(RenCarDestinations.SELFIE_VERIFICATION) {
+            SelfieRoute(
+                onNavigateToConfirmation = {
+                    navController.navigate(RenCarDestinations.CONFIRMATION)
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(RenCarDestinations.CONFIRMATION) {
+            ConfirmationRoute(
                 onNavigateToHome = {
                     navController.navigate(RenCarDestinations.HOME) {
                         popUpTo(RenCarDestinations.ONBOARDING) { inclusive = true }
