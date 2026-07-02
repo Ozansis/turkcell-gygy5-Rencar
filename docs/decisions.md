@@ -53,3 +53,30 @@ Projede verilen bütün mimarisel-teknik kararları ve karar geçmişini içeren
 - Sebep: Backend API hazır olana kadar UI geliştirmesinin bloke olmaması için. ViewModel yalnızca
   interface'e bağımlı olduğundan, gerçek implementasyon hazır olduğunda yalnızca
   `di/<Feature>Module.kt` güncellenir; ViewModel ve Screen'e dokunulmaz.
+
+- Mevcut Durum: Hilt entegrasyonu tamamlanana kadar ViewModel doğrudan `<Feature>MockSource`
+  nesnesini kullanır. Hilt entegre edildiğinde ViewModel interface'e bağımlı hale getirilir ve
+  sahte/gerçek implementasyon seçimi `di/<Feature>Module.kt` dosyasına taşınır.
+
+---
+
+### Parametre Alan ViewModel Factory Stratejisi
+
+- Seçim: **ViewModelProvider.Factory** (geçici) → **@AssistedInject** (Hilt entegrasyonu sonrası)
+
+- Son Güncelleme Tarihi: 2026-07-02
+
+- Alternatifler: SavedStateHandle üzerinden parametre aktarımı
+
+- Mevcut Durum: `OtpRoute.kt` içinde manuel `ViewModelProvider.Factory` implementasyonu
+  kullanılmaktadır. Route dosyasına `private class OtpViewModelFactory` eklenerek
+  `remember(phoneNumber) { OtpViewModelFactory(phoneNumber) }` ile factory sağlanır.
+
+- Planlanan Değişiklik: Hilt entegrasyonu tamamlandığında `@AssistedInject` ve
+  `@AssistedFactory` anotasyonları kullanılacaktır. Bu durumda manuel factory sınıfı
+  kaldırılır; Route dosyasında yalnızca `hiltViewModel(creationCallback = ...)` çağrısı kalır.
+
+- Sebep: `@AssistedInject` ile factory boilerplate ortadan kalkar ve ViewModel, Hilt
+  dependency graph'ına tam olarak entegre olur.
+
+- Referans: `app/src/main/java/com/turkcell/rencar_pair/feature/auth/otp/OtpRoute.kt`

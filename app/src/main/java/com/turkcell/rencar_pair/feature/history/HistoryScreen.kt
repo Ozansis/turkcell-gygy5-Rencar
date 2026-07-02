@@ -1,0 +1,201 @@
+package com.turkcell.rencar_pair.feature.history
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+
+@Composable
+fun HistoryScreen(
+    state: HistoryContract.State,
+    onIntent: (HistoryContract.Intent) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        HistoryHeader(
+            tripCount      = state.monthlyTripCount,
+            totalSpending  = state.monthlySpending
+        )
+
+        LazyColumn(
+            contentPadding      = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(state.rentals, key = { it.id }) { rental ->
+                RentalCard(
+                    rental  = rental,
+                    onClick = { onIntent(HistoryContract.Intent.RentalSelected(rental.id)) }
+                )
+            }
+            item { Spacer(Modifier.height(8.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun HistoryHeader(
+    tripCount: Int,
+    totalSpending: Double
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(top = 28.dp, bottom = 4.dp)
+    ) {
+        Text(
+            text  = "Kiralamalarım",
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text  = "Bu ay $tripCount yolculuk · ₺${Math.round(totalSpending)} harcama",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun RentalCard(
+    rental: RentalRecord,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier       = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
+        shape          = RoundedCornerShape(16.dp),
+        color          = MaterialTheme.colorScheme.surface,
+        shadowElevation = 2.dp,
+        tonalElevation = 1.dp
+    ) {
+        Row(
+            modifier          = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CarThumbnail()
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier              = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text       = "${rental.carBrand} ${rental.carModel}",
+                        style      = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color      = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text       = formatPrice(rental.totalPrice),
+                        style      = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color      = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    text  = rental.dateLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StatLabel("${rental.durationMinutes} dk")
+                    StatDot()
+                    StatLabel(formatDistance(rental.distanceKm))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CarThumbnail() {
+    Box(
+        modifier         = Modifier
+            .size(64.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector        = Icons.Filled.DirectionsCar,
+            contentDescription = null,
+            tint               = MaterialTheme.colorScheme.primary,
+            modifier           = Modifier.size(36.dp)
+        )
+    }
+}
+
+@Composable
+private fun StatLabel(text: String) {
+    Text(
+        text  = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun StatDot() {
+    Text(
+        text  = " · ",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+private fun formatPrice(price: Double): String {
+    val cents    = Math.round(price * 100)
+    val intPart  = cents / 100
+    val decPart  = cents % 100
+    return "₺$intPart,${decPart.toString().padStart(2, '0')}"
+}
+
+private fun formatDistance(km: Double): String {
+    val tenths  = Math.round(km * 10)
+    val intPart = tenths / 10
+    val decPart = tenths % 10
+    return "$intPart,$decPart km"
+}
