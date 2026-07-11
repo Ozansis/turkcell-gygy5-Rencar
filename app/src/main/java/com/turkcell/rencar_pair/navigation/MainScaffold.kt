@@ -20,7 +20,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.turkcell.rencar_pair.feature.history.HistoryRoute
-import com.turkcell.rencar_pair.feature.home.HomeScreen
+import com.turkcell.rencar_pair.feature.maps.MapsRoute
 import com.turkcell.rencar_pair.feature.profile.ProfileRoute
 import com.turkcell.rencar_pair.feature.wallet.WalletRoute
 
@@ -32,7 +32,9 @@ private val bottomNavItems = listOf(
 )
 
 @Composable
-fun MainScaffold() {
+fun MainScaffold(
+    onNavigateToVehicleDetail: (String) -> Unit = {}
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -89,7 +91,9 @@ fun MainScaffold() {
             startDestination = BottomNavItem.Map.route,
             modifier         = Modifier.padding(innerPadding)
         ) {
-            composable(BottomNavItem.Map.route)      { HomeScreen() }
+            composable(BottomNavItem.Map.route) {
+                MapsRoute(onNavigateToVehicleDetail = onNavigateToVehicleDetail)
+            }
             composable(BottomNavItem.History.route)  { HistoryRoute() }
             composable(BottomNavItem.Listings.route) { WalletRoute() }
             composable(BottomNavItem.Profile.route)  { ProfileRoute() }
