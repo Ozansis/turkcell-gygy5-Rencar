@@ -11,6 +11,7 @@ import com.turkcell.rencar_pair.feature.auth.license.LicenseRoute
 import com.turkcell.rencar_pair.feature.auth.login.LoginRoute
 import com.turkcell.rencar_pair.feature.auth.otp.OtpRoute
 import com.turkcell.rencar_pair.feature.auth.selfie.SelfieRoute
+import com.turkcell.rencar_pair.feature.maps.detail.VehicleDetailRoute
 import com.turkcell.rencar_pair.feature.onboarding.OnboardingRoute
 
 private object RenCarDestinations {
@@ -21,8 +22,10 @@ private object RenCarDestinations {
     const val SELFIE_VERIFICATION = "selfie-verification"
     const val CONFIRMATION = "confirmation"
     const val HOME = "home"
+    const val VEHICLE_DETAIL = "vehicle-detail/{vehicleId}"
 
     fun otpRoute(phoneNumber: String) = "otp/$phoneNumber"
+    fun vehicleDetailRoute(vehicleId: String) = "vehicle-detail/$vehicleId"
 }
 
 @Composable
@@ -100,7 +103,22 @@ fun RenCarNavHost() {
         }
 
         composable(RenCarDestinations.HOME) {
-            MainScaffold()
+            MainScaffold(
+                onNavigateToVehicleDetail = { vehicleId ->
+                    navController.navigate(RenCarDestinations.vehicleDetailRoute(vehicleId))
+                }
+            )
+        }
+
+        composable(
+            route     = RenCarDestinations.VEHICLE_DETAIL,
+            arguments = listOf(navArgument("vehicleId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val vehicleId = backStackEntry.arguments?.getString("vehicleId").orEmpty()
+            VehicleDetailRoute(
+                vehicleId      = vehicleId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
     }
 }
