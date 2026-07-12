@@ -34,6 +34,10 @@ Kod üretmeden önce şunları yapmak zorundasın;
 
 - Planı sun, onay almadan asla implementasyona başlama.
 
+### 2.4) BAĞLAM DOSYASI
+Her göreve başlamadan önce PROGRESS.md'nin son girdilerini oku.
+Görev onaylanıp tamamlandıktan sonra PROGRESS.md'ye yeni girdi eklemek zorunludur.
+
 ## 3) MİMARİ REFERANSLAR
 
 Herhangi bir MVI ekranı oluşturmadan veya değiştirmeden önce aşağıdaki dosyaları okumak zorundasın.
