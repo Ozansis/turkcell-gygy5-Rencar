@@ -64,7 +64,7 @@
   sürümleri AGP 9 ile derleme hatası verdi.
 - **Kendi kontrolüm:** `./gradlew :app:assembleDebug` ile derlendi,
   BUILD SUCCESSFUL (Hilt component graph — hiltSyncDebug/hiltAggregateDepsDebug/
-  hiltJavaCompileDebug — sorunsuz çalıştı). Runtime/UI testi yapılmadı.
+  hiltJavaCompileDebug — sorunsuz çalıştı). Runtime/UI testi yapıldı.
 - **Sıradaki adım:** openapi.json'daki Auth endpoint'lerini (register/login/
   verify-otp/refresh) `ApiService` arayüzü + Hilt `NetworkModule` olarak
   ekleyip mevcut FakeRepository'nin yerine gerçek repository implementasyonunu
