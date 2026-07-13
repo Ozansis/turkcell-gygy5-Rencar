@@ -39,4 +39,34 @@
 - **Sıradaki adım:** FAZ 0 — dead-end effect'ler (Profile: 5, Wallet: 2,
   VehicleDetail: 2). MainScaffold import hatası manuel düzeltildi ✅.
 
-### [Bir sonraki girdiyi buraya ekle]
+### 2026-07-13 Bilinen Sorunlar (henüz çözülmedi)
+- Maps: mock araçlar haritada görünmüyor
+- Maps: "En Yakın Aracı Bul" sonrası harita kayboluyor
+
+### 2026-07-13 — Network altyapısı: Retrofit + Hilt kuruldu
+- **Ne yapıldı:** Auth akışını gerçek API'ye bağlamak için minimum network
+  altyapısı kuruldu: Retrofit, OkHttp + logging-interceptor, Hilt, KSP,
+  hilt-navigation-compose bağımlılıkları eklendi; `RenCarApplication`
+  (`@HiltAndroidApp`) oluşturuldu; `MainActivity`'e `@AndroidEntryPoint`
+  eklendi; Manifest'te application adı güncellendi. `openapi.json` bu
+  batch'te KULLANILMADI (yalnız referans amaçlı okundu) — endpoint/DTO
+  entegrasyonu sonraki batch.
+- **Değişen dosyalar:** `gradle/libs.versions.toml`, `build.gradle.kts`
+  (root), `app/build.gradle.kts`, `app/src/main/java/com/turkcell/rencar_pair/RenCarApplication.kt`
+  (yeni), `app/src/main/java/com/turkcell/rencar_pair/MainActivity.kt`,
+  `app/src/main/AndroidManifest.xml`
+- **Neden bu şekilde yapıldı:** decisions.md'de Hilt zaten seçilmişti;
+  Retrofit 3.0.0 + OkHttp 4.12.0 kombinasyonu Retrofit'in resmi transitive
+  bağımlılığıyla hizalı seçildi (kullanıcı düzeltmesiyle; ilk önerilen
+  OkHttp 5.4.0 hatalıydı). Proje AGP 9.2.1 kullandığından Hilt 2.59.2
+  (AGP 9 desteği 2.59+'da geldi) ve KSP 2.3.9 (AGP 9 built-in Kotlin
+  desteği) seçildi — ilk denenen Hilt 2.57.2 ve KSP 2.2.10-2.0.2
+  sürümleri AGP 9 ile derleme hatası verdi.
+- **Kendi kontrolüm:** `./gradlew :app:assembleDebug` ile derlendi,
+  BUILD SUCCESSFUL (Hilt component graph — hiltSyncDebug/hiltAggregateDepsDebug/
+  hiltJavaCompileDebug — sorunsuz çalıştı). Runtime/UI testi yapılmadı.
+- **Sıradaki adım:** openapi.json'daki Auth endpoint'lerini (register/login/
+  verify-otp/refresh) `ApiService` arayüzü + Hilt `NetworkModule` olarak
+  ekleyip mevcut FakeRepository'nin yerine gerçek repository implementasyonunu
+  bağlamak (decisions.md'deki Repository Stub Stratejisi'ne göre yalnız
+  `di/<Feature>Module.kt` değişecek).
