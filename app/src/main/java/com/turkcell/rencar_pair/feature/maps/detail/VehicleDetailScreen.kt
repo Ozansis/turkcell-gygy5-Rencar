@@ -25,6 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -33,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -120,7 +122,8 @@ private fun VehicleDetailSheet(
                     icon = Icons.Default.LocalGasStation,
                     label = "Yakıt",
                     value = "%${state.fuelPercent}",
-                    sublabel = state.tankLabel
+                    sublabel = state.tankLabel,
+                    fuelPercent = state.fuelPercent
                 )
                 InfoCard(
                     modifier = Modifier.weight(1f),
@@ -239,7 +242,8 @@ private fun InfoCard(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
-    sublabel: String? = null
+    sublabel: String? = null,
+    fuelPercent: Int? = null
 ) {
     Surface(
         modifier = modifier,
@@ -267,7 +271,20 @@ private fun InfoCard(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
+            if (fuelPercent != null) {
+                Spacer(Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = { fuelPercent / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = fuelBarColor(fuelPercent),
+                    trackColor = MaterialTheme.colorScheme.outlineVariant
+                )
+            }
             if (sublabel != null) {
+                Spacer(Modifier.height(if (fuelPercent != null) 4.dp else 0.dp))
                 Text(
                     text = sublabel,
                     style = MaterialTheme.typography.labelSmall,
@@ -276,4 +293,10 @@ private fun InfoCard(
             }
         }
     }
+}
+
+private fun fuelBarColor(fuelPercent: Int): Color = when {
+    fuelPercent < 20 -> Color(0xFFE53935)
+    fuelPercent < 50 -> Color(0xFFFB8C00)
+    else             -> Color(0xFF43A047)
 }

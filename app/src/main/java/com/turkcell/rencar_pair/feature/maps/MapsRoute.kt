@@ -29,6 +29,8 @@ import org.maplibre.android.geometry.LatLng
 @Composable
 fun MapsRoute(
     onNavigateToVehicleDetail: (String) -> Unit = {},
+    onLocationPermissionStatusChanged: (Boolean) -> Unit = {},
+    permissionRequestTrigger: Int = 0,
     viewModel: MapsViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -58,6 +60,21 @@ fun MapsRoute(
         if (hasLocationPermission) {
             viewModel.onIntent(MapsContract.Intent.LocationPermissionGranted)
         } else {
+            permissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
+        }
+    }
+
+    // İzin durumu her değiştiğinde üst bileşene (MainScaffold) bildirilir.
+    LaunchedEffect(hasLocationPermission) {
+        onLocationPermissionStatusChanged(hasLocationPermission)
+    }
+
+    // Üst bileşen, izinsiz sekme geçişi engellendiğinde bu tetikleyiciyi artırarak
+    // sistem izin diyaloğunun tekrar açılmasını ister.
+    LaunchedEffect(permissionRequestTrigger) {
+        if (permissionRequestTrigger > 0 && !hasLocationPermission) {
             permissionLauncher.launch(
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
             )
