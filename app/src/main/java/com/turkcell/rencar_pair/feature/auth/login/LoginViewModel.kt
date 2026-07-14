@@ -2,6 +2,10 @@ package com.turkcell.rencar_pair.feature.auth.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.turkcell.rencar_pair.data.repository.AuthRepository
+import com.turkcell.rencar_pair.data.repository.AuthResult
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,7 +15,12 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class LoginViewModel : ViewModel() {
+private const val COUNTRY_CODE = "+90"
+
+@HiltViewModel
+class LoginViewModel @Inject constructor(
+    private val authRepository: AuthRepository
+) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginContract.State())
     val state: StateFlow<LoginContract.State> = _state.asStateFlow()
@@ -35,8 +44,21 @@ class LoginViewModel : ViewModel() {
 
     private fun handleSendCode() {
         val current = _state.value
-        if (!current.isPhoneNumberValid) return
-        sendEffect(LoginContract.Effect.NavigateToOtp(current.phoneNumber))
+        if (!current.isPhoneNumberValid || current.isLoading) return
+
+        _state.update { it.copy(isLoading = true) }
+        viewModelScope.launch {
+            when (val result = authRepository.requestOtp(COUNTRY_CODE + current.phoneNumber)) {
+                is AuthResult.Success -> {
+                    _state.update { it.copy(isLoading = false) }
+                    sendEffect(LoginContract.Effect.NavigateToOtp(current.phoneNumber))
+                }
+                is AuthResult.Error -> {
+                    _state.update { it.copy(isLoading = false) }
+                    sendEffect(LoginContract.Effect.ShowError(result.message))
+                }
+            }
+        }
     }
 
     private fun sendEffect(effect: LoginContract.Effect) {
