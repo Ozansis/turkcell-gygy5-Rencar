@@ -99,3 +99,38 @@
   `AuthApiService`'i saran) ve token saklama (DataStore/EncryptedPrefs)
   eklenmesi; ardından `di/AuthModule.kt` ile fake/real seçimi ve auth
   header ekleyen bir OkHttp interceptor.
+
+### 2026-07-14 — API v2'ye geçiş + token saklama + auth interceptor + AuthRepository
+- **Ne yapıldı:** Gerçek backend'in `https://rencarv2.halitkalayci.com/api/docs`
+  adresindeki güncel (v2) OpenAPI şeması canlı olarak çekilip
+  `docs/api/openapi.json` bu şemayla değiştirildi (v1 bayattı — `segment`,
+  `includeBusy`, `/vehicles/{id}/quote` gibi yeni alanlar/uçlar eksikti).
+  `NetworkModule.kt`'deki `BASE_URL` v1'den v2'ye güncellendi. Ardından token
+  saklama (DataStore Preferences tabanlı `TokenStore`), bir OkHttp
+  `AuthInterceptor` (auth uçları hariç tüm isteklere `Authorization: Bearer`
+  ekler) ve bunları saran `AuthRepository` (requestOtp/verifyOtp/refresh/logout)
+  eklendi.
+- **Değişen dosyalar:** `docs/api/openapi.json`, `di/NetworkModule.kt`,
+  `gradle/libs.versions.toml`, `app/build.gradle.kts`,
+  `data/local/TokenStore.kt` (yeni), `data/network/AuthInterceptor.kt` (yeni),
+  `data/repository/AuthRepository.kt` (yeni)
+- **Neden bu şekilde yapıldı:** `di/AuthModule.kt` (decisions.md'nin öngördüğü
+  fake/real seçim modülü) bilinçli olarak eklenmedi — Auth için artık bir
+  "fake" varyant planlanmadığından (login zaten gerçek API'ye bağlanacak),
+  `AuthRepository`'nin `@Inject constructor` ile doğrudan Hilt tarafından
+  sağlanması yeterli; gereksiz bir modül dosyası eklemek aşırı mühendislik
+  olurdu. `AuthInterceptor` senkron çalıştığından (`OkHttp Interceptor`),
+  `TokenStore` erişim token'ını DataStore'a ek olarak bellekte
+  (`AtomicReference`) de tutuyor; ilk değer uygulama başlarken `runBlocking`
+  ile diskten okunuyor (tek seferlik, küçük bir okuma olduğundan kabul
+  edilebilir bulundu).
+- **Kendi kontrolüm:** `./gradlew :app:assembleDebug` ile derlendi, BUILD
+  SUCCESSFUL (Hilt/KSP DI grafiği `AuthInterceptor`/`TokenStore`/
+  `AuthRepository` enjeksiyonlarıyla birlikte sorunsuz üretildi). Yeni
+  dosyalar henüz hiçbir ViewModel'den çağrılmadığı için runtime/network
+  testi yapılmadı (bu bilinçli olarak sıradaki adıma bırakıldı).
+- **Sıradaki adım:** `LoginViewModel.handleSendCode()` ve
+  `OtpViewModel.handleVerify()`'ı `AuthRepository.requestOtp`/`verifyOtp`'a
+  bağlamak (Faz 3); ardından v2 `VehicleResponseDto` şemasına göre
+  `VehiclesApiService` + DTO'lar + repository eklenip `MapsViewModel`'in
+  `MapsMockSource` yerine gerçek veriyi kullanması (Faz 4-5).

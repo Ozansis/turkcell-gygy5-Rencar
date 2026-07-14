@@ -3,6 +3,7 @@ package com.turkcell.rencar_pair.di
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import com.turkcell.rencar_pair.data.network.AuthApiService
+import com.turkcell.rencar_pair.data.network.AuthInterceptor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -14,7 +15,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Singleton
 
-private const val BASE_URL = "https://rencar.halitkalayci.com/"
+private const val BASE_URL = "https://rencarv2.halitkalayci.com/"
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -35,8 +36,12 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(loggingInterceptor: HttpLoggingInterceptor): OkHttpClient {
+    fun provideOkHttpClient(
+        authInterceptor: AuthInterceptor,
+        loggingInterceptor: HttpLoggingInterceptor
+    ): OkHttpClient {
         return OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .build()
     }
