@@ -134,3 +134,34 @@
   bağlamak (Faz 3); ardından v2 `VehicleResponseDto` şemasına göre
   `VehiclesApiService` + DTO'lar + repository eklenip `MapsViewModel`'in
   `MapsMockSource` yerine gerçek veriyi kullanması (Faz 4-5).
+
+### 2026-07-14 — Faz 3: Login/Otp ekranları gerçek Auth API'ye bağlandı
+- **Ne yapıldı:** `LoginViewModel` ve `OtpViewModel`, `AuthRepository`
+  üzerinden gerçek `/auth/login` ve `/auth/verify-otp` uçlarına bağlandı.
+  `LoginViewModel` `@HiltViewModel` + `@Inject constructor` oldu;
+  `OtpViewModel` telefon numarasını runtime parametresi olarak almaya
+  devam ettiği için `@HiltViewModel(assistedFactory = ...)` +
+  `@AssistedInject`/`@AssistedFactory` deseniyle Hilt'e bağlandı (eski
+  manuel `ViewModelProvider.Factory` kaldırıldı). Her iki Contract'a
+  `ShowError(message: String)` effect'i eklendi, Route'larda Toast ile
+  gösteriliyor. "Kod Yeniden Gönder" artık gerçekten `requestOtp`'u tekrar
+  çağırıyor (öncesinde sadece sayaç sıfırlıyordu).
+- **Değişen dosyalar:** `feature/auth/login/LoginContract.kt`,
+  `LoginViewModel.kt`, `LoginRoute.kt`, `feature/auth/otp/OtpContract.kt`,
+  `OtpViewModel.kt`, `OtpRoute.kt`
+- **Neden bu şekilde yapıldı:** UI'nin telefon numarasını 10 haneli
+  (ülke kodsuz) tutması nedeniyle API çağrılarında `"+90"` öneki
+  ViewModel içinde ekleniyor (iki dosyada küçük tekrar — ayrı bir yardımcı
+  dosya açmak bu ölçekte gereksiz soyutlama olurdu). `OtpViewModel` için
+  assisted injection'a geçiş, decisions.md'nin "Hilt sonrası
+  @AssistedInject'e geçilecek" planına uygun; ancak bu geçiş yalnızca
+  bu iki ekranla sınırlı tutuldu, projedeki diğer parametre alan
+  ViewModel'lere (örn. `VehicleDetailViewModel`) dokunulmadı (kapsam dışı).
+- **Kendi kontrolüm:** `./gradlew :app:assembleDebug` ile derlendi, BUILD
+  SUCCESSFUL (Hilt/KSP, AssistedFactory üretimi dahil sorunsuz). Gerçek
+  bir telefon numarasıyla uçtan uca çalıştırma (login → OTP → home) henüz
+  yapılmadı.
+- **Sıradaki adım:** Uçtan uca runtime testi (gerçek/test telefon
+  numarasıyla, varsayılan OTP kodu 123456) yapmak; ardından Faz 4 —
+  v2 `VehicleResponseDto` şemasına göre `VehiclesApiService` + DTO'lar +
+  repository eklenmesi.

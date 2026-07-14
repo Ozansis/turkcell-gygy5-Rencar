@@ -20,5 +20,6 @@ object LoginContract {
         data class NavigateToOtp(val phoneNumber: String) : Effect
         data object NavigateToRegister : Effect
         data object NavigateBack : Effect
+        data class ShowError(val message: String) : Effect
     }
 }
