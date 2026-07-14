@@ -165,3 +165,35 @@
   numarasıyla, varsayılan OTP kodu 123456) yapmak; ardından Faz 4 —
   v2 `VehicleResponseDto` şemasına göre `VehiclesApiService` + DTO'lar +
   repository eklenmesi.
+
+### 2026-07-14 — Faz 4: Vehicles API katmanı eklendi
+- **Ne yapıldı:** v2 `VehicleResponseDto` şemasına (fuelPercent, rangeKm,
+  transmission, seats, segment dahil) göre `VehiclesApiService` (GET
+  /vehicles ve /vehicles/{id}, type/segment/page/limit/includeBusy query
+  parametreleriyle) ve bunu saran `VehiclesRepository` eklendi.
+  `NetworkModule.kt`'ye `VehiclesApiService` sağlayıcısı eklendi.
+- **Değişen dosyalar:** `data/network/dto/VehicleDtos.kt` (yeni),
+  `data/network/VehiclesApiService.kt` (yeni),
+  `data/repository/VehiclesRepository.kt` (yeni), `di/NetworkModule.kt`
+- **Neden bu şekilde yapıldı:** `type`/`segment`/`status`/`transmission`
+  alanları, backend'in `role` alanı için zaten benimsediği desene uyarak
+  Kotlin enum değil `String` tutuldu (API yeni bir değer dönerse Gson
+  deserialization'ının patlamasını önlemek için) — eşleme (domain
+  modele çevirme) Faz 5'te yapılacak. `VehiclesRepository`, ayrı bir
+  sonuç sarmalayıcı (result wrapper) yazmak yerine `AuthRepository.kt`
+  içindeki genel amaçlı `AuthResult<T>`'yi yeniden kullandı — isim
+  "Auth" ile sınırlıymış gibi görünse de yapısal olarak jenerik;
+  yeniden adlandırmak `LoginViewModel`/`OtpViewModel` dahil 4 dosyaya
+  daha dokunmayı gerektirdiğinden bu batch'te kapsam dışı bırakıldı
+  (bkz. öneriler).
+- **Kendi kontrolüm:** `./gradlew :app:assembleDebug` ile derlendi, BUILD
+  SUCCESSFUL. Henüz hiçbir ViewModel bu repository'yi çağırmadığından
+  runtime testi yok.
+- **Sıradaki adım:** Faz 5 — `MapsViewModel.loadVehicles()`'ı
+  `MapsMockSource` yerine `VehiclesRepository`'ye bağlamak;
+  `distanceMeters` (haversine) ve `tankLabel` (fuelPercent'ten türetilen)
+  istemci tarafında hesaplanacak, `MapsMockSource` kaldırılacak.
+- **Öneri:** `AuthResult<T>` adı, artık Auth dışı repository'lerde de
+  kullanıldığından `ApiResult<T>` gibi daha nötr bir isme taşınabilir —
+  ileride tüm kullanım yerlerini (Auth + Vehicles ViewModel'leri) tek
+  bir batch'te güncellemek gerekir.
