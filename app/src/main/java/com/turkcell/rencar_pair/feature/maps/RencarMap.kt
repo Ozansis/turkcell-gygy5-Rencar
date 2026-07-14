@@ -1,6 +1,7 @@
 package com.turkcell.rencar_pair.feature.maps
 
 import android.graphics.Color
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -11,10 +12,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.gson.JsonObject
+import com.turkcell.rencar_pair.R
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -34,12 +38,16 @@ import kotlin.math.roundToInt
 
 val DEFAULT_CENTER: LatLng = LatLng(38.51740367746754, 27.161930350129918)
 
+private const val TAG = "RencarMap"
+
 private val ME_MARKER_COLOR = Color.parseColor("#4285F4")
 private val VEHICLE_MARKER_COLOR = Color.parseColor("#1F2937")
 
 private const val VEHICLES_SOURCE_ID = "vehicles"
 private const val VEHICLE_CIRCLE_LAYER_ID = "vehicle-circle-layer"
+private const val VEHICLE_ICON_LAYER_ID = "vehicle-icon-layer"
 private const val VEHICLE_PRICE_LAYER_ID = "vehicle-price-layer"
+private const val VEHICLE_ICON_IMAGE_ID = "vehicle-car-icon"
 
 class RencarMapController internal constructor() {
     internal var map: MapLibreMap? = null
@@ -111,6 +119,11 @@ fun RencarMap(
             }
 
             map.setStyle(Style.Builder().fromJson(OSM_STYLE_JSON)) { loaded ->
+                // Araç marker ikonu -> vector drawable bitmap'e çevrilip stile kaydedilir.
+                ContextCompat.getDrawable(context, R.drawable.ic_car_marker)?.let { drawable ->
+                    loaded.addImage(VEHICLE_ICON_IMAGE_ID, drawable.toBitmap())
+                }
+
                 loaded.addSource(GeoJsonSource("me"))
                 // Dış halka -> konumun etrafında yumuşak, yarı saydam bir halo.
                 loaded.addLayer(
@@ -141,12 +154,22 @@ fun RencarMap(
                         PropertyFactory.circleStrokeWidth(2f)
                     )
                 )
-                // Fiyat etiketi -> baloncuğun üzerindeki metin.
+                // Araç simgesi -> baloncuğun ortasındaki araç ikonu.
+                loaded.addLayer(
+                    SymbolLayer(VEHICLE_ICON_LAYER_ID, VEHICLES_SOURCE_ID).withProperties(
+                        PropertyFactory.iconImage(VEHICLE_ICON_IMAGE_ID),
+                        PropertyFactory.iconSize(0.55f),
+                        PropertyFactory.iconAllowOverlap(true),
+                        PropertyFactory.iconIgnorePlacement(true)
+                    )
+                )
+                // Fiyat etiketi -> baloncuğun altındaki metin.
                 loaded.addLayer(
                     SymbolLayer(VEHICLE_PRICE_LAYER_ID, VEHICLES_SOURCE_ID).withProperties(
                         PropertyFactory.textField(Expression.get("price")),
                         PropertyFactory.textSize(11f),
                         PropertyFactory.textColor(Color.WHITE),
+                        PropertyFactory.textOffset(arrayOf(0f, 1.4f)),
                         PropertyFactory.textAllowOverlap(true),
                         PropertyFactory.textIgnorePlacement(true)
                     )
@@ -177,7 +200,9 @@ fun RencarMap(
         val location = myLocation ?: return@LaunchedEffect
 
         hasZoomedToUser = true
-        map.animateCamera(CameraUpdateFactory.newLatLngZoom(location.toLatLng(), 14.0))
+        val zoom = 14.0
+        Log.d(TAG, "İlk zoom -> lat=${location.latitude}, lon=${location.longitude}, zoom=$zoom")
+        map.animateCamera(CameraUpdateFactory.newLatLngZoom(location.toLatLng(), zoom))
     }
 
     // AndroidView -> Android ile @Composable köprüsü.
