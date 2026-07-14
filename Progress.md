@@ -134,3 +134,74 @@
   bağlamak (Faz 3); ardından v2 `VehicleResponseDto` şemasına göre
   `VehiclesApiService` + DTO'lar + repository eklenip `MapsViewModel`'in
   `MapsMockSource` yerine gerçek veriyi kullanması (Faz 4-5).
+### 2026-07-14 — Register ekranı (Contract/ViewModel/Screen/Route) + AuthRepository.register()
+- **Ne yapıldı:** `feature/auth/register/` paketi sıfırdan oluşturuldu
+  (RegisterContract/ViewModel/Screen/Route) ve `AuthRepository`'ye `verifyOtp()`
+  ile aynı desende bir `register()` fonksiyonu eklendi (başarılıysa
+  `tokenStore.saveTokens(...)` çağrılır). `AuthApiService.register` ve
+  `RegisterDto` zaten mevcuttu (önceki batch'te eklenmişti) ve
+  `docs/api/openapi.json`'daki `POST /auth/register` şemasıyla birebir
+  eşleşiyordu — bu batch'te değiştirilmedi. `RenCarNavHost.kt` bilinçli
+  olarak KAPSAM DIŞI bırakıldı (Agent.md §2.1 dosya limiti gereği ayrı
+  onay bekleyen 6. dosya); Login'deki `onNavigateToRegister` TODO'su hâlâ
+  boş, `RegisterRoute` henüz hiçbir NavHost'a bağlı değil.
+- **Değişen dosyalar (yeni):** `feature/auth/register/RegisterContract.kt`,
+  `RegisterViewModel.kt`, `RegisterScreen.kt`, `RegisterRoute.kt`.
+  **Değişen dosya:** `data/repository/AuthRepository.kt` (register() eklendi).
+- **Neden bu şekilde yapıldı:** Kullanıcı onayıyla üç ürün kararı netleşti:
+  (1) kayıt başarılı olduğunda License Verification akışına yönlendirme
+  (OTP doğrulama sonrasıyla tutarlı, her iki giriş yolu da PENDING rollü
+  kullanıcıyı aynı kimlik doğrulama akışına sokuyor); (2) formda client-side
+  şifre tekrarı (confirm password) alanı var, API'ye yalnız `password`
+  gönderiliyor; (3) telefon numarası Login ile aynı desende 10 haneli yerel
+  numara olarak toplanıyor, ViewModel API'ye göndermeden önce başına "+90"
+  ekliyor. `RegisterViewModel`, projede `@HiltViewModel` + repository inject
+  eden İLK ViewModel oldu (Login/Otp henüz Hilt'e taşınmadı) — kullanıcının
+  açık talimatıyla bilinçli bir öncülük, Login/Otp'nin Hilt'e taşınması ayrı
+  bir migration batch'i olarak bekliyor. Şifre alanları kullanıcı talebiyle
+  `PasswordVisualTransformation()` + `KeyboardType.Password` ile maskelendi.
+  Form 6 alan içerdiğinden (Login/Otp'nin tek alanına kıyasla) Column'a
+  `verticalScroll` eklendi — küçük ekranlarda taşmayı önlemek için.
+- **Kendi kontrolüm:** `./gradlew :app:assembleDebug` ile derlendi, BUILD
+  SUCCESSFUL. Tek uyarı: `hiltViewModel` (androidx.hilt.navigation.compose
+  1.4.0) yeni bir pakete taşınmak üzere deprecated işaretli — derlemeyi
+  bloklamıyor, yeni bağımlılık eklemeden şimdilik göz ardı edildi. NavHost'a
+  bağlı olmadığından runtime/UI testi yapılamadı (bilinçli olarak sonraki
+  onaylı adıma bırakıldı).
+- **Sıradaki adım:** (6. dosya, ayrı onay bekliyor) `RenCarNavHost.kt`'ye
+  `REGISTER` route sabiti eklenip Login'deki `onNavigateToRegister` TODO'su
+  gerçek navigasyona bağlanmalı; ardından uçtan uca happy-path testi
+  (Login → Kayıt ol → form → Kayıt Ol → License Verification + token
+  kaydı) yapılmalı. Sonrasında `LoginViewModel.handleSendCode()` ve
+  `OtpViewModel.handleVerify()`'ı `AuthRepository.requestOtp`/`verifyOtp`'a
+  bağlamak (Faz 3) hâlâ bekliyor.
+
+### 2026-07-14 — RenCarNavHost.kt: Register ekranı bağlandı
+- **Ne yapıldı:** Bir önceki batch'te "6. dosya, ayrı onay bekliyor" olarak
+  bırakılan `RenCarNavHost.kt` değişikliği yapıldı. `RenCarDestinations`'a
+  parametresiz `REGISTER = "register"` sabiti eklendi; Login'deki boş
+  `onNavigateToRegister` TODO'su `navController.navigate(REGISTER)`'a
+  bağlandı; yeni `REGISTER` composable bloğu `RegisterRoute`'un 3
+  callback'ini (`onNavigateToLicenseVerification`, `onNavigateToLogin`,
+  `onNavigateBack`) NavHost'a kabloladı.
+- **Değişen dosyalar:** `navigation/RenCarNavHost.kt`
+- **Neden bu şekilde yapıldı:** `onNavigateToLicenseVerification`,
+  OTP doğrulama sonrası izlenen mevcut yolla (`OtpRoute.onNavigateToHome`
+  → `LICENSE_VERIFICATION`) birebir aynı hedefe (`navigate(LICENSE_VERIFICATION)`)
+  bağlandı — ehliyet doğrulama akışının ilk ekranı zaten bu route.
+  `onNavigateToLogin` VE `onNavigateBack` ikisi de kasıtlı olarak
+  `navigate(LOGIN)` değil `popBackStack()` kullanıyor: Register'a ulaşmanın
+  tek yolu Login'in `GoToRegister`'ı olduğundan Register her zaman Login'in
+  üstünde push edilmiş durumda; `navigate(LOGIN)` backstack'e ikinci bir
+  Login örneği daha ekleyip geri tuşuna iki kez basma sorunu yaratırdı.
+  Bu, projede zaten LICENSE_VERIFICATION/SELFIE/OTP/VEHICLE_DETAIL'in
+  `onNavigateBack`'i için kullandığı desenle tutarlı.
+- **Kendi kontrolüm:** `./gradlew :app:assembleDebug` ile derlendi, BUILD
+  SUCCESSFUL. Emülatör/cihazda runtime UI testi yapılmadı (önceki
+  batch'lerle tutarlı olarak yalnızca derleme doğrulaması yapıldı) —
+  istenirse ayrı bir adımda çalıştırılıp Login → Kayıt ol → form doldur →
+  Kayıt Ol → License Verification akışı elle doğrulanabilir.
+- **Sıradaki adım:** Register ekranının uçtan uca happy-path testi
+  (gerçek cihaz/emülatörde); ardından `LoginViewModel.handleSendCode()` ve
+  `OtpViewModel.handleVerify()`'ı `AuthRepository.requestOtp`/`verifyOtp`'a
+  bağlamak (Faz 3) hâlâ bekliyor.

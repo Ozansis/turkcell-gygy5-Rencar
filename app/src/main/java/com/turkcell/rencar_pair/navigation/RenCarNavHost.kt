@@ -10,6 +10,7 @@ import com.turkcell.rencar_pair.feature.auth.confirmation.ConfirmationRoute
 import com.turkcell.rencar_pair.feature.auth.license.LicenseRoute
 import com.turkcell.rencar_pair.feature.auth.login.LoginRoute
 import com.turkcell.rencar_pair.feature.auth.otp.OtpRoute
+import com.turkcell.rencar_pair.feature.auth.register.RegisterRoute
 import com.turkcell.rencar_pair.feature.auth.selfie.SelfieRoute
 import com.turkcell.rencar_pair.feature.maps.detail.VehicleDetailRoute
 import com.turkcell.rencar_pair.feature.onboarding.OnboardingRoute
@@ -17,6 +18,7 @@ import com.turkcell.rencar_pair.feature.onboarding.OnboardingRoute
 private object RenCarDestinations {
     const val ONBOARDING = "onboarding"
     const val LOGIN = "login"
+    const val REGISTER = "register"
     const val OTP = "otp/{phoneNumber}"
     const val LICENSE_VERIFICATION = "license-verification"
     const val SELFIE_VERIFICATION = "selfie-verification"
@@ -54,8 +56,20 @@ fun RenCarNavHost() {
                 onNavigateToOtp = { phoneNumber ->
                     navController.navigate(RenCarDestinations.otpRoute(phoneNumber))
                 },
-                onNavigateToRegister = { /* TODO: Kayit ekrani hazir oldugunda baglanacak */ },
+                onNavigateToRegister = {
+                    navController.navigate(RenCarDestinations.REGISTER)
+                },
                 onNavigateBack        = { navController.popBackStack() }
+            )
+        }
+
+        composable(RenCarDestinations.REGISTER) {
+            RegisterRoute(
+                onNavigateToLicenseVerification = {
+                    navController.navigate(RenCarDestinations.LICENSE_VERIFICATION)
+                },
+                onNavigateToLogin = { navController.popBackStack() },
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

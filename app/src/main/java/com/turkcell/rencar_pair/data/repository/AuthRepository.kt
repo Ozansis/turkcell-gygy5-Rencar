@@ -6,6 +6,7 @@ import com.turkcell.rencar_pair.data.network.dto.AuthResponseDto
 import com.turkcell.rencar_pair.data.network.dto.LoginDto
 import com.turkcell.rencar_pair.data.network.dto.OtpRequiredResponseDto
 import com.turkcell.rencar_pair.data.network.dto.RefreshTokenDto
+import com.turkcell.rencar_pair.data.network.dto.RegisterDto
 import com.turkcell.rencar_pair.data.network.dto.VerifyOtpDto
 import java.io.IOException
 import javax.inject.Inject
@@ -22,6 +23,25 @@ class AuthRepository @Inject constructor(
     private val authApiService: AuthApiService,
     private val tokenStore: TokenStore
 ) {
+
+    suspend fun register(
+        email: String,
+        password: String,
+        fullName: String,
+        phone: String,
+        referralCode: String?
+    ): AuthResult<Unit> {
+        val result = safeCall {
+            authApiService.register(RegisterDto(email, password, fullName, phone, referralCode))
+        }
+        if (result is AuthResult.Success) {
+            tokenStore.saveTokens(result.data.accessToken, result.data.refreshToken)
+        }
+        return when (result) {
+            is AuthResult.Success -> AuthResult.Success(Unit)
+            is AuthResult.Error -> result
+        }
+    }
 
     suspend fun requestOtp(phone: String): AuthResult<OtpRequiredResponseDto> {
         return safeCall { authApiService.login(LoginDto(phone)) }
