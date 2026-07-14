@@ -69,4 +69,33 @@
   verify-otp/refresh) `ApiService` arayüzü + Hilt `NetworkModule` olarak
   ekleyip mevcut FakeRepository'nin yerine gerçek repository implementasyonunu
   bağlamak (decisions.md'deki Repository Stub Stratejisi'ne göre yalnız
-  `di/<Feature>Module.kt` değişecek).
+  `di/<Feature>Module.kt` değişecek)
+- ### Hatırlatma
+- Register ekranı UI'da HİÇ YOK (sadece LoginRoute'ta boş bir TODO var).
+  Network katmanı bittiğinde ilk ekran işi bu olmalı.
+
+### 2026-07-14 — Auth Retrofit servis katmanı (DTO + API arayüzü + NetworkModule)
+- **Ne yapıldı:** openapi.json'daki 6 auth endpoint'i (register/login/verify-otp/
+  refresh/logout/me) için Retrofit sözleşmesi kuruldu: DTO'lar, `AuthApiService`
+  arayüzü ve bunları sağlayan Hilt `NetworkModule`. Repository katmanı, token
+  saklama ve ViewModel entegrasyonu bilinçli olarak kapsam dışı bırakıldı.
+- **Değişen dosyalar (yeni):** `data/network/dto/AuthDtos.kt`,
+  `data/network/AuthApiService.kt`, `di/NetworkModule.kt`
+- **Neden bu şekilde yapıldı:** `data/`, `network/`, `di/` paketleri projede
+  hiç yoktu, sıfırdan oluşturuldu. `role` alanı bilinçli olarak enum değil
+  `String` (API yeni bir rol dönerse Gson deserialization'ının patlamasını
+  önlemek için). `HttpLoggingInterceptor` seviyesi debug'da BODY, release'de
+  BASIC yapıldı — aksi halde parola ve access/refresh token'lar release
+  Logcat'ine düz metin yazılırdı (kullanıcı onayıyla karar verildi).
+  `di/NetworkModule.kt`, decisions.md'nin öngördüğü `di/AuthModule.kt`
+  (fake/real repository seçimi) ile ÇAKIŞMIYOR — tamamlayıcı, altyapı
+  katmanı; repository binding'i hâlâ gelecek `AuthModule.kt`'ye ait.
+- **Kendi kontrolüm:** `./gradlew :app:assembleDebug` ile derlendi, BUILD
+  SUCCESSFUL. Derleme sırasında proje dışı bir ortam sorunu çıktı (Gradle
+  daemon yanlış bir JRE ile başlamıştı, jlink yoktu) — daemon durdurulup tam
+  JDK ile yeniden başlatılarak çözüldü, proje dosyalarına dokunulmadı. Yeni
+  dosyalar henüz hiçbir yerden çağrılmadığı için runtime/network testi yok.
+- **Sıradaki adım:** `AuthRepository` arayüzü + gerçek implementasyonu (bu
+  `AuthApiService`'i saran) ve token saklama (DataStore/EncryptedPrefs)
+  eklenmesi; ardından `di/AuthModule.kt` ile fake/real seçimi ve auth
+  header ekleyen bir OkHttp interceptor.
