@@ -1,30 +1,31 @@
 package com.turkcell.rencar_pair.feature.auth.otp
 
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.remember
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun OtpRoute(
     phoneNumber: String,
     onNavigateToHome: () -> Unit,
     onNavigateBack: () -> Unit,
-    viewModel: OtpViewModel = viewModel(
-        factory = remember(phoneNumber) { OtpViewModelFactory(phoneNumber) }
+    viewModel: OtpViewModel = hiltViewModel<OtpViewModel, OtpViewModel.Factory>(
+        creationCallback = { factory -> factory.create(phoneNumber) }
     )
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
             when (effect) {
                 OtpContract.Effect.NavigateToHome -> onNavigateToHome()
                 OtpContract.Effect.NavigateBack    -> onNavigateBack()
+                is OtpContract.Effect.ShowError    -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -33,11 +34,4 @@ fun OtpRoute(
         state    = state,
         onIntent = viewModel::onIntent
     )
-}
-
-private class OtpViewModelFactory(private val phoneNumber: String) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return OtpViewModel(phoneNumber) as T
-    }
 }

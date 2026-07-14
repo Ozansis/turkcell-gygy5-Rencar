@@ -2,6 +2,12 @@ package com.turkcell.rencar_pair.feature.auth.otp
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.turkcell.rencar_pair.data.repository.AuthRepository
+import com.turkcell.rencar_pair.data.repository.AuthResult
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -13,7 +19,18 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class OtpViewModel(phoneNumber: String) : ViewModel() {
+private const val COUNTRY_CODE = "+90"
+
+@HiltViewModel(assistedFactory = OtpViewModel.Factory::class)
+class OtpViewModel @AssistedInject constructor(
+    @Assisted phoneNumber: String,
+    private val authRepository: AuthRepository
+) : ViewModel() {
+
+    @AssistedFactory
+    interface Factory {
+        fun create(phoneNumber: String): OtpViewModel
+    }
 
     private val _state = MutableStateFlow(OtpContract.State(phoneNumber = phoneNumber))
     val state: StateFlow<OtpContract.State> = _state.asStateFlow()
@@ -42,14 +59,32 @@ class OtpViewModel(phoneNumber: String) : ViewModel() {
     }
 
     private fun handleVerify() {
-        if (!_state.value.isCodeComplete) return
-        sendEffect(OtpContract.Effect.NavigateToHome)
+        val current = _state.value
+        if (!current.isCodeComplete || current.isVerifying) return
+
+        _state.update { it.copy(isVerifying = true) }
+        viewModelScope.launch {
+            val result = authRepository.verifyOtp(COUNTRY_CODE + current.phoneNumber, current.code)
+            _state.update { it.copy(isVerifying = false) }
+            when (result) {
+                is AuthResult.Success -> sendEffect(OtpContract.Effect.NavigateToHome)
+                is AuthResult.Error   -> sendEffect(OtpContract.Effect.ShowError(result.message))
+            }
+        }
     }
 
     private fun handleResendCode() {
-        if (!_state.value.canResend) return
+        val current = _state.value
+        if (!current.canResend) return
+
         _state.update { it.copy(code = "", remainingSeconds = OtpContract.RESEND_COOLDOWN_SECONDS) }
         startCountdown()
+        viewModelScope.launch {
+            val result = authRepository.requestOtp(COUNTRY_CODE + current.phoneNumber)
+            if (result is AuthResult.Error) {
+                sendEffect(OtpContract.Effect.ShowError(result.message))
+            }
+        }
     }
 
     private fun startCountdown() {
