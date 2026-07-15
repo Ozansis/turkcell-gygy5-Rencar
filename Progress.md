@@ -439,3 +439,37 @@
   `rememberSaveable`/tek instance olacak şekilde nav-safe hale getirilmesi
   veya geri dönüşte native render'ı tetikleyen bir `invalidate()` çağrısı
   gerekebilir.
+
+### 2026-07-15 — Araç detay ekranına mini harita eklendi (seçilen araç + kendi konumum)
+- **Ne yapıldı:** `VehicleDetailScreen`'deki düz renkli arka plan `Box`,
+  Maps ekranındaki `RencarMap` composable'ı yeniden kullanılarak gerçek bir
+  mini haritayla değiştirildi. Harita, seçilen aracın konumuna ortalanıyor
+  (turuncu marker) ve — izin verilmişse — kullanıcının bilinen son konumunu
+  da (mavi nokta) gösteriyor. `VehicleDetailContract.State`'e `type`,
+  `pricePerDay`, `vehicleLocation`, `myLocation` alanları ve
+  `Intent.LocationChanged` eklendi; `VehicleDetailViewModel.loadVehicle()`
+  bu alanları `VehicleResponseDto.latitude/longitude/type/pricePerDay`'den
+  dolduruyor.
+- **Değişen dosyalar:** `feature/maps/detail/VehicleDetailContract.kt`,
+  `feature/maps/detail/VehicleDetailViewModel.kt`,
+  `feature/maps/detail/VehicleDetailRoute.kt`,
+  `feature/maps/detail/VehicleDetailScreen.kt`
+- **Neden bu şekilde yapıldı:** Faz 6'daki (2026-07-14) "bu ekrana ikinci bir
+  konum aboneliği kurulmasın" kararı kullanıcı isteğiyle bilinçli olarak
+  gözden geçirildi — ancak Maps ekranındaki gibi TAM bir izin isteme +
+  sürekli `LocationRequest` akışı kurmak yerine "sessiz kontrol" tercih
+  edildi: `VehicleDetailRoute` izin diyaloğu AÇMIYOR, yalnızca mevcut izin
+  durumunu okuyor; izin varsa `fusedClient.lastLocation` ile TEK SEFERLİK
+  bir okuma yapılıyor (abonelik yok). İzin yoksa harita yalnızca aracı
+  gösteriyor, kullanıcı noktası basılmıyor. Haritadaki tek araç marker'ı
+  için yeni bir veri modeli yazmak yerine mevcut `NearbyVehicle` tipi
+  yeniden kullanıldı (`VehicleDetailContract.State`'ten `toMapVehicle()`
+  ile eşleniyor) — `RencarMap`'e dokunulmadı, Maps akışında regresyon
+  riski oluşturulmadı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (yalnızca projede zaten var olan `hiltViewModel()`
+  deprecation uyarısı). Cihazda görsel/runtime testi (mini haritada aracın
+  ve mavi konum noktasının göründüğü) henüz yapılmadı.
+- **Sıradaki adım:** Emülatörde/cihazda bir araca tıklayıp detay ekranında
+  mini haritanın aracı doğru konumda gösterdiğini, konum izni verilmişse
+  mavi noktanın da göründüğünü doğrulamak.

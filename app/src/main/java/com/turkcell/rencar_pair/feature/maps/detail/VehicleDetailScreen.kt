@@ -38,6 +38,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.turkcell.rencar_pair.feature.maps.GeoPoint
+import com.turkcell.rencar_pair.feature.maps.NearbyVehicle
+import com.turkcell.rencar_pair.feature.maps.RencarMap
+import org.maplibre.android.geometry.LatLng
 
 @Composable
 fun VehicleDetailScreen(
@@ -46,11 +50,22 @@ fun VehicleDetailScreen(
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        )
+        val vehicleLocation = state.vehicleLocation
+        if (vehicleLocation != null) {
+            RencarMap(
+                myLocation = state.myLocation,
+                vehicles = listOf(state.toMapVehicle(vehicleLocation)),
+                modifier = Modifier.fillMaxSize(),
+                initialCenter = vehicleLocation.toLatLng(),
+                initialZoom = 15.0
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
+        }
 
         IconButton(
             onClick = { onIntent(VehicleDetailContract.Intent.NavigateBack) },
@@ -300,3 +315,24 @@ private fun fuelBarColor(fuelPercent: Int): Color = when {
     fuelPercent < 50 -> Color(0xFFFB8C00)
     else             -> Color(0xFF43A047)
 }
+
+private fun VehicleDetailContract.State.toMapVehicle(location: GeoPoint): NearbyVehicle = NearbyVehicle(
+    id = vehicleId,
+    plate = plate,
+    brand = brand,
+    model = model,
+    type = type,
+    status = status,
+    pricePerDay = pricePerDay,
+    location = location,
+    distanceMeters = distanceMeters,
+    fuelPercent = fuelPercent,
+    tankLabel = tankLabel,
+    rangeKm = rangeKm,
+    transmission = transmission,
+    seatCount = seatCount,
+    pricePerMinute = pricePerMinute,
+    pricePerHour = pricePerHour
+)
+
+private fun GeoPoint.toLatLng(): LatLng = LatLng(latitude, longitude)
