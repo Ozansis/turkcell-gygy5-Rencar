@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.turkcell.rencar_pair.data.network.dto.VehicleResponseDto
 import com.turkcell.rencar_pair.data.repository.AuthResult
 import com.turkcell.rencar_pair.data.repository.VehiclesRepository
+import com.turkcell.rencar_pair.feature.maps.GeoPoint
 import com.turkcell.rencar_pair.feature.maps.VehicleStatus
+import com.turkcell.rencar_pair.feature.maps.VehicleType
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -47,9 +49,10 @@ class VehicleDetailViewModel @AssistedInject constructor(
 
     fun onIntent(intent: VehicleDetailContract.Intent) {
         when (intent) {
-            VehicleDetailContract.Intent.ReserveClicked -> handleReserveClicked()
-            VehicleDetailContract.Intent.UnlockClicked  -> handleUnlockClicked()
-            VehicleDetailContract.Intent.NavigateBack   -> sendEffect(VehicleDetailContract.Effect.NavigateBack)
+            VehicleDetailContract.Intent.ReserveClicked      -> handleReserveClicked()
+            VehicleDetailContract.Intent.UnlockClicked       -> handleUnlockClicked()
+            VehicleDetailContract.Intent.NavigateBack        -> sendEffect(VehicleDetailContract.Effect.NavigateBack)
+            is VehicleDetailContract.Intent.LocationChanged  -> handleLocationChanged(intent.location)
         }
     }
 
@@ -60,20 +63,24 @@ class VehicleDetailViewModel @AssistedInject constructor(
                 is AuthResult.Success -> {
                     val vehicle = result.data
                     val vehicleStatus = runCatching { VehicleStatus.valueOf(vehicle.status) }.getOrNull()
+                    val vehicleType = runCatching { VehicleType.valueOf(vehicle.type) }.getOrNull()
                     _state.update {
                         it.copy(
-                            isLoading      = false,
-                            brand          = vehicle.brand,
-                            model          = vehicle.model,
-                            plate          = vehicle.plate,
-                            status         = vehicleStatus ?: it.status,
-                            fuelPercent    = vehicle.fuelPercent.roundToInt(),
-                            tankLabel      = tankLabel(vehicle.fuelPercent),
-                            rangeKm        = vehicle.rangeKm.roundToInt(),
-                            transmission   = vehicle.transmission,
-                            seatCount      = vehicle.seats,
-                            pricePerMinute = vehicle.pricePerMinute,
-                            pricePerHour   = vehicle.pricePerHour
+                            isLoading       = false,
+                            brand           = vehicle.brand,
+                            model           = vehicle.model,
+                            plate           = vehicle.plate,
+                            type            = vehicleType ?: it.type,
+                            status          = vehicleStatus ?: it.status,
+                            fuelPercent     = vehicle.fuelPercent.roundToInt(),
+                            tankLabel       = tankLabel(vehicle.fuelPercent),
+                            rangeKm         = vehicle.rangeKm.roundToInt(),
+                            transmission    = vehicle.transmission,
+                            seatCount       = vehicle.seats,
+                            pricePerMinute  = vehicle.pricePerMinute,
+                            pricePerHour    = vehicle.pricePerHour,
+                            pricePerDay     = vehicle.pricePerDay,
+                            vehicleLocation = GeoPoint(vehicle.latitude, vehicle.longitude)
                         )
                     }
                 }
@@ -93,6 +100,10 @@ class VehicleDetailViewModel @AssistedInject constructor(
     private fun handleUnlockClicked() {
         if (!_state.value.canUnlock) return
         sendEffect(VehicleDetailContract.Effect.ShowUnlockConfirmed)
+    }
+
+    private fun handleLocationChanged(location: GeoPoint) {
+        _state.update { it.copy(myLocation = location) }
     }
 
     private fun sendEffect(effect: VehicleDetailContract.Effect) {
