@@ -552,3 +552,30 @@
   `Icons.Filled.List` deprecation uyarısı kaldı.
 - **Sıradaki adım:** Yok — bu görev kapandı. Bir sonraki oturum, bir
   önceki girdideki "canlı konum runtime testi" ile devam edebilir.
+
+### 2026-07-15 — origin/main bu branch'e merge edildi (onboarding düzeltmesi + Register ekranı geldi)
+- **Ne yapıldı:** Kullanıcı isteğiyle `origin/main` (PR #16 ile merge edilmiş
+  "Hemen Başla artık Login'e gidiyor" onboarding düzeltmesi dahil) bu
+  branch'e (`feature/auth-v2-network`) merge edildi; fast-forward oldu
+  (bu branch zaten main'in bir atasıydı). Merge, main'de bu branch'ten
+  habersiz eklenmiş `feature/auth/register/` ekranını (Contract/ViewModel/
+  Screen/Route + `AuthRepository.register()`) de beraberinde getirdi.
+  Bu ekran, bu branch'teki hiltViewModel migration'ından (bkz. yukarıdaki
+  girdi) ÖNCE/bağımsız yazıldığından `RegisterRoute.kt` hâlâ kaldırılmış
+  olan `androidx.hilt.navigation.compose.hiltViewModel` import'unu
+  kullanıyordu — derleme bozuldu. Diğer 4 Route dosyasıyla aynı düzeltme
+  (`androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel`) uygulandı.
+- **Değişen dosyalar:** `feature/auth/register/RegisterRoute.kt` (yalnızca
+  import satırı). Merge'ün kendisi 12 dosyayı etkiledi (Register ekranı,
+  onboarding, NavHost, Progress.md, Agent.md/Claude.md) ama bunlar main'den
+  gelen, bu oturumda YAZILMAYAN değişiklikler.
+- **Neden bu şekilde yapıldı:** Merge sırasında yerel, commit edilmemiş
+  `.idea/misc.xml` değişikliği merge'ü engelledi ("would be overwritten");
+  bu dosya kullanıcıya ait bir IDE ayarı olduğundan atılmadı, `git stash`
+  ile kenara alınıp merge sonrası geri getirildi.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (RegisterRoute düzeltmesinden sonra). Register ekranının
+  runtime/UI testi yapılmadı (bu branch'te yazılmadığından kapsam dışı).
+- **Sıradaki adım:** Bu branch şu an origin/feature/auth-v2-network'ün
+  12 commit ilerisinde (merge + RegisterRoute düzeltmesi) — push edilmedi,
+  kullanıcı onayı bekleniyor.
