@@ -111,26 +111,7 @@ fun OnboardingScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier          = Modifier.height(IntrinsicSize.Min)
-            ) {
-                Text(
-                    text  = "Zaten hesabım var · ",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                TextButton(
-                    onClick         = { onIntent(OnboardingContract.Intent.GoToLogin) },
-                    contentPadding  = PaddingValues(0.dp)
-                ) {
-                    Text(
-                        text  = "Giriş yap",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
+
 
             Spacer(Modifier.height(32.dp))
         }
