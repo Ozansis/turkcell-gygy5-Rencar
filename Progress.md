@@ -26,8 +26,7 @@
 - **Değişen dosyalar:** Yok (sadece analiz)
 - **Neden bu şekilde yapıldı:** Koda dokunmadan önce tam resmi görmek gerekiyordu.
 - **Kendi kontrolüm:** N/A
-- **Sıradaki adım:** FAZ 0 — hijyen düzeltmeleri (MainScaffold import: MANUEL
-  DÜZELTİLDİ ✅). Sırada: dead-end effect'ler.
+
 
 ### 2026-07-13 — PROGRESS.md / NOTLARIM.md kuruldu
 - **Ne yapıldı:** Oturumlar arası bağlam takibi için PROGRESS.md ve NOTLARIM.md
@@ -36,8 +35,7 @@
 - **Neden bu şekilde yapıldı:** AI ile çalışırken oturum başına bağlamı sıfırdan
   anlatmamak, projeye gerçek hakimiyeti korumak için.
 - **Kendi kontrolüm:** N/A (henüz kod değişikliği yok)
-- **Sıradaki adım:** FAZ 0 — dead-end effect'ler (Profile: 5, Wallet: 2,
-  VehicleDetail: 2). MainScaffold import hatası manuel düzeltildi ✅.
+
 
 ### 2026-07-13 Bilinen Sorunlar (henüz çözülmedi)
 - Maps: mock araçlar haritada görünmüyor
@@ -65,11 +63,7 @@
 - **Kendi kontrolüm:** `./gradlew :app:assembleDebug` ile derlendi,
   BUILD SUCCESSFUL (Hilt component graph — hiltSyncDebug/hiltAggregateDepsDebug/
   hiltJavaCompileDebug — sorunsuz çalıştı). Runtime/UI testi yapıldı.
-- **Sıradaki adım:** openapi.json'daki Auth endpoint'lerini (register/login/
-  verify-otp/refresh) `ApiService` arayüzü + Hilt `NetworkModule` olarak
-  ekleyip mevcut FakeRepository'nin yerine gerçek repository implementasyonunu
-  bağlamak (decisions.md'deki Repository Stub Stratejisi'ne göre yalnız
-  `di/<Feature>Module.kt` değişecek)
+
 - ### Hatırlatma
 - Register ekranı UI'da HİÇ YOK (sadece LoginRoute'ta boş bir TODO var).
   Network katmanı bittiğinde ilk ekran işi bu olmalı.
@@ -95,10 +89,7 @@
   daemon yanlış bir JRE ile başlamıştı, jlink yoktu) — daemon durdurulup tam
   JDK ile yeniden başlatılarak çözüldü, proje dosyalarına dokunulmadı. Yeni
   dosyalar henüz hiçbir yerden çağrılmadığı için runtime/network testi yok.
-- **Sıradaki adım:** `AuthRepository` arayüzü + gerçek implementasyonu (bu
-  `AuthApiService`'i saran) ve token saklama (DataStore/EncryptedPrefs)
-  eklenmesi; ardından `di/AuthModule.kt` ile fake/real seçimi ve auth
-  header ekleyen bir OkHttp interceptor.
+
 
 ### 2026-07-14 — API v2'ye geçiş + token saklama + auth interceptor + AuthRepository
 - **Ne yapıldı:** Gerçek backend'in `https://rencarv2.halitkalayci.com/api/docs`
@@ -129,11 +120,7 @@
   `AuthRepository` enjeksiyonlarıyla birlikte sorunsuz üretildi). Yeni
   dosyalar henüz hiçbir ViewModel'den çağrılmadığı için runtime/network
   testi yapılmadı (bu bilinçli olarak sıradaki adıma bırakıldı).
-- **Sıradaki adım:** `LoginViewModel.handleSendCode()` ve
-  `OtpViewModel.handleVerify()`'ı `AuthRepository.requestOtp`/`verifyOtp`'a
-  bağlamak (Faz 3); ardından v2 `VehicleResponseDto` şemasına göre
-  `VehiclesApiService` + DTO'lar + repository eklenip `MapsViewModel`'in
-  `MapsMockSource` yerine gerçek veriyi kullanması (Faz 4-5).
+
 ### 2026-07-14 — Register ekranı (Contract/ViewModel/Screen/Route) + AuthRepository.register()
 - **Ne yapıldı:** `feature/auth/register/` paketi sıfırdan oluşturuldu
   (RegisterContract/ViewModel/Screen/Route) ve `AuthRepository`'ye `verifyOtp()`
@@ -168,13 +155,7 @@
   bloklamıyor, yeni bağımlılık eklemeden şimdilik göz ardı edildi. NavHost'a
   bağlı olmadığından runtime/UI testi yapılamadı (bilinçli olarak sonraki
   onaylı adıma bırakıldı).
-- **Sıradaki adım:** (6. dosya, ayrı onay bekliyor) `RenCarNavHost.kt`'ye
-  `REGISTER` route sabiti eklenip Login'deki `onNavigateToRegister` TODO'su
-  gerçek navigasyona bağlanmalı; ardından uçtan uca happy-path testi
-  (Login → Kayıt ol → form → Kayıt Ol → License Verification + token
-  kaydı) yapılmalı. Sonrasında `LoginViewModel.handleSendCode()` ve
-  `OtpViewModel.handleVerify()`'ı `AuthRepository.requestOtp`/`verifyOtp`'a
-  bağlamak (Faz 3) hâlâ bekliyor.
+
 
 ### 2026-07-14 — RenCarNavHost.kt: Register ekranı bağlandı
 - **Ne yapıldı:** Bir önceki batch'te "6. dosya, ayrı onay bekliyor" olarak
@@ -201,10 +182,7 @@
   batch'lerle tutarlı olarak yalnızca derleme doğrulaması yapıldı) —
   istenirse ayrı bir adımda çalıştırılıp Login → Kayıt ol → form doldur →
   Kayıt Ol → License Verification akışı elle doğrulanabilir.
-- **Sıradaki adım:** Register ekranının uçtan uca happy-path testi
-  (gerçek cihaz/emülatörde); ardından `LoginViewModel.handleSendCode()` ve
-  `OtpViewModel.handleVerify()`'ı `AuthRepository.requestOtp`/`verifyOtp`'a
-  bağlamak (Faz 3) hâlâ bekliyor.
+
 
 
 ### 2026-07-14 — Faz 3: Login/Otp ekranları gerçek Auth API'ye bağlandı
@@ -233,10 +211,7 @@
   SUCCESSFUL (Hilt/KSP, AssistedFactory üretimi dahil sorunsuz). Gerçek
   bir telefon numarasıyla uçtan uca çalıştırma (login → OTP → home) henüz
   yapılmadı.
-- **Sıradaki adım:** Uçtan uca runtime testi (gerçek/test telefon
-  numarasıyla, varsayılan OTP kodu 123456) yapmak; ardından Faz 4 —
-  v2 `VehicleResponseDto` şemasına göre `VehiclesApiService` + DTO'lar +
-  repository eklenmesi.
+
 
 ### 2026-07-14 — Faz 4: Vehicles API katmanı eklendi
 - **Ne yapıldı:** v2 `VehicleResponseDto` şemasına (fuelPercent, rangeKm,
@@ -261,10 +236,7 @@
 - **Kendi kontrolüm:** `./gradlew :app:assembleDebug` ile derlendi, BUILD
   SUCCESSFUL. Henüz hiçbir ViewModel bu repository'yi çağırmadığından
   runtime testi yok.
-- **Sıradaki adım:** Faz 5 — `MapsViewModel.loadVehicles()`'ı
-  `MapsMockSource` yerine `VehiclesRepository`'ye bağlamak;
-  `distanceMeters` (haversine) ve `tankLabel` (fuelPercent'ten türetilen)
-  istemci tarafında hesaplanacak, `MapsMockSource` kaldırılacak.
+
 - **Öneri:** `AuthResult<T>` adı, artık Auth dışı repository'lerde de
   kullanıldığından `ApiResult<T>` gibi daha nötr bir isme taşınabilir —
   ileride tüm kullanım yerlerini (Auth + Vehicles ViewModel'leri) tek
