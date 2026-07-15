@@ -13,7 +13,6 @@ object OnboardingContract {
 
     sealed interface Intent {
         data object PrimaryAction : Intent
-        data object GoToLogin : Intent
     }
 
     sealed interface Effect {

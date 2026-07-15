@@ -40,13 +40,12 @@ class OnboardingViewModel : ViewModel() {
     fun onIntent(intent: OnboardingContract.Intent) {
         when (intent) {
             OnboardingContract.Intent.PrimaryAction -> handlePrimaryAction()
-            OnboardingContract.Intent.GoToLogin     -> sendEffect(OnboardingContract.Effect.NavigateToLogin)
         }
     }
 
     private fun handlePrimaryAction() {
         if (_state.value.isLastPage) {
-            sendEffect(OnboardingContract.Effect.NavigateToHome)
+            sendEffect(OnboardingContract.Effect.NavigateToLogin)
         } else {
             _state.update { it.copy(currentPage = it.currentPage + 1) }
         }
