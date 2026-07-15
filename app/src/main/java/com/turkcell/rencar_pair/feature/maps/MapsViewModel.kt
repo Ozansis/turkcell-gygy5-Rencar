@@ -2,8 +2,14 @@ package com.turkcell.rencar_pair.feature.maps
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.turkcell.rencar_pair.data.network.dto.VehicleResponseDto
+import com.turkcell.rencar_pair.data.repository.AuthResult
+import com.turkcell.rencar_pair.data.repository.VehiclesRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlinx.coroutines.channels.Channel
@@ -16,8 +22,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
+private const val FULL_TANK_THRESHOLD = 70.0
+private const val HALF_TANK_THRESHOLD = 30.0
 
-class MapsViewModel : ViewModel() {
+@HiltViewModel
+class MapsViewModel @Inject constructor(
+    private val vehiclesRepository: VehiclesRepository
+) : ViewModel() {
 
     private val _state = MutableStateFlow(MapsContract.State())
     val state: StateFlow<MapsContract.State> = _state.asStateFlow()
@@ -35,18 +46,42 @@ class MapsViewModel : ViewModel() {
             MapsContract.Intent.LocationPermissionGranted  -> handleLocationPermissionGranted()
             MapsContract.Intent.LocationPermissionDenied   -> handleLocationPermissionDenied()
             is MapsContract.Intent.TypeFilterSelected      -> handleTypeFilterSelected(intent.type)
-            is MapsContract.Intent.VehicleMarkerClicked    -> sendEffect(MapsContract.Effect.NavigateToVehicleDetail(intent.vehicleId))
+            is MapsContract.Intent.VehicleMarkerClicked    -> handleVehicleMarkerClicked(intent.vehicleId)
             MapsContract.Intent.RecenterClicked            -> sendEffect(MapsContract.Effect.RequestLocationRefresh)
             MapsContract.Intent.FindNearestClicked         -> handleFindNearestClicked()
         }
     }
 
     private fun loadVehicles() {
-        _state.update { it.copy(vehicles = MapsMockSource.vehicles) }
+        _state.update { it.copy(isLoading = true) }
+        viewModelScope.launch {
+            when (val result = vehiclesRepository.listVehicles(includeBusy = true)) {
+                is AuthResult.Success -> {
+                    val myLocation = _state.value.myLocation
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            vehicles = result.data.mapNotNull { dto -> dto.toNearbyVehicle(myLocation) }
+                        )
+                    }
+                }
+                is AuthResult.Error -> {
+                    _state.update { it.copy(isLoading = false) }
+                    sendEffect(MapsContract.Effect.ShowError(result.message))
+                }
+            }
+        }
     }
 
     private fun handleLocationChanged(location: GeoPoint) {
-        _state.update { it.copy(myLocation = location) }
+        _state.update {
+            it.copy(
+                myLocation = location,
+                vehicles = it.vehicles.map { vehicle ->
+                    vehicle.copy(distanceMeters = distanceMeters(location, vehicle.location).roundToInt())
+                }
+            )
+        }
     }
 
     private fun handleLocationPermissionGranted() {
@@ -62,13 +97,18 @@ class MapsViewModel : ViewModel() {
         _state.update { it.copy(selectedType = type) }
     }
 
+    private fun handleVehicleMarkerClicked(vehicleId: String) {
+        val vehicle = _state.value.vehicles.find { it.id == vehicleId } ?: return
+        sendEffect(MapsContract.Effect.NavigateToVehicleDetail(vehicle.id, vehicle.distanceMeters))
+    }
+
     private fun handleFindNearestClicked() {
         val myLocation = _state.value.myLocation ?: return
         val nearest = _state.value.filteredVehicles
             .filter { it.status == VehicleStatus.AVAILABLE }
             .minByOrNull { distanceMeters(myLocation, it.location) }
             ?: return
-        sendEffect(MapsContract.Effect.NavigateToVehicleDetail(nearest.id))
+        sendEffect(MapsContract.Effect.NavigateToVehicleDetail(nearest.id, nearest.distanceMeters))
     }
 
     private fun distanceMeters(from: GeoPoint, to: GeoPoint): Double {
@@ -83,5 +123,35 @@ class MapsViewModel : ViewModel() {
 
     private fun sendEffect(effect: MapsContract.Effect) {
         viewModelScope.launch { _effect.send(effect) }
+    }
+
+    private fun VehicleResponseDto.toNearbyVehicle(myLocation: GeoPoint?): NearbyVehicle? {
+        val vehicleType = runCatching { VehicleType.valueOf(type) }.getOrNull() ?: return null
+        val vehicleStatus = runCatching { VehicleStatus.valueOf(status) }.getOrNull() ?: return null
+        val vehicleLocation = GeoPoint(latitude, longitude)
+        return NearbyVehicle(
+            id = id,
+            plate = plate,
+            brand = brand,
+            model = model,
+            type = vehicleType,
+            status = vehicleStatus,
+            pricePerDay = pricePerDay,
+            location = vehicleLocation,
+            distanceMeters = myLocation?.let { distanceMeters(it, vehicleLocation).roundToInt() } ?: 0,
+            fuelPercent = fuelPercent.roundToInt(),
+            tankLabel = tankLabel(fuelPercent),
+            rangeKm = rangeKm.roundToInt(),
+            transmission = transmission,
+            seatCount = seats,
+            pricePerMinute = pricePerMinute,
+            pricePerHour = pricePerHour
+        )
+    }
+
+    private fun tankLabel(fuelPercent: Double): String = when {
+        fuelPercent >= FULL_TANK_THRESHOLD -> "Dolu depo"
+        fuelPercent >= HALF_TANK_THRESHOLD -> "Yarı dolu depo"
+        else -> "Az yakıt"
     }
 }

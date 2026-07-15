@@ -40,5 +40,6 @@ object VehicleDetailContract {
         data object NavigateBack             : Effect
         data object ShowReservationConfirmed : Effect
         data object ShowUnlockConfirmed      : Effect
+        data class ShowError(val message: String) : Effect
     }
 }

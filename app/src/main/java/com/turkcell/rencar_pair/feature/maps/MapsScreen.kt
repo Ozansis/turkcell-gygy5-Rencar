@@ -17,10 +17,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
@@ -59,6 +62,16 @@ fun MapsScreen(
             .align(Alignment.TopCenter)
             .padding(16.dp))
 
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = 296.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ZoomButton(icon = Icons.Default.Add, contentDescription = "Yakınlaştır", onClick = { mapController.zoomIn() })
+            ZoomButton(icon = Icons.Default.Remove, contentDescription = "Uzaklaştır", onClick = { mapController.zoomOut() })
+        }
+
         FloatingActionButton(
             onClick = { onIntent(MapsContract.Intent.RecenterClicked) },
             modifier = Modifier
@@ -76,6 +89,24 @@ fun MapsScreen(
             onIntent = onIntent,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+    }
+}
+
+@Composable
+private fun ZoomButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = modifier.size(40.dp),
+        shape = CircleShape,
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.primary
+    ) {
+        Icon(icon, contentDescription = contentDescription)
     }
 }
 

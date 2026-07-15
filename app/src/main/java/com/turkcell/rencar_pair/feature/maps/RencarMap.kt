@@ -1,7 +1,6 @@
 package com.turkcell.rencar_pair.feature.maps
 
 import android.graphics.Color
-import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -23,10 +22,10 @@ import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
-import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
@@ -38,15 +37,12 @@ import kotlin.math.roundToInt
 
 val DEFAULT_CENTER: LatLng = LatLng(38.51740367746754, 27.161930350129918)
 
-private const val TAG = "RencarMap"
-
 private val ME_MARKER_COLOR = Color.parseColor("#4285F4")
-private val VEHICLE_MARKER_COLOR = Color.parseColor("#1F2937")
+private val VEHICLE_MARKER_COLOR = Color.parseColor("#FB923C")
 
 private const val VEHICLES_SOURCE_ID = "vehicles"
 private const val VEHICLE_CIRCLE_LAYER_ID = "vehicle-circle-layer"
 private const val VEHICLE_ICON_LAYER_ID = "vehicle-icon-layer"
-private const val VEHICLE_PRICE_LAYER_ID = "vehicle-price-layer"
 private const val VEHICLE_ICON_IMAGE_ID = "vehicle-car-icon"
 
 class RencarMapController internal constructor() {
@@ -54,6 +50,14 @@ class RencarMapController internal constructor() {
 
     fun animateTo(target: LatLng, zoom: Double = 10.0) {
         map?.animateCamera(CameraUpdateFactory.newLatLngZoom(target, zoom))
+    }
+
+    fun zoomIn() {
+        map?.animateCamera(CameraUpdateFactory.zoomIn())
+    }
+
+    fun zoomOut() {
+        map?.animateCamera(CameraUpdateFactory.zoomOut())
     }
 }
 
@@ -145,36 +149,33 @@ fun RencarMap(
                 )
 
                 loaded.addSource(GeoJsonSource(VEHICLES_SOURCE_ID))
+                // Dış halka -> araç konumunun etrafında yumuşak, yarı saydam bir halo (uzaktan da fark edilsin).
+                loaded.addLayer(
+                    CircleLayer("vehicle-halo-layer", VEHICLES_SOURCE_ID).withProperties(
+                        PropertyFactory.circleColor(VEHICLE_MARKER_COLOR),
+                        PropertyFactory.circleRadius(22f),
+                        PropertyFactory.circleOpacity(0.25f),
+                        PropertyFactory.circleBlur(0.5f)
+                    )
+                )
                 // Araç konumu -> fiyat baloncuğunun arka planı.
                 loaded.addLayer(
                     CircleLayer(VEHICLE_CIRCLE_LAYER_ID, VEHICLES_SOURCE_ID).withProperties(
                         PropertyFactory.circleColor(VEHICLE_MARKER_COLOR),
-                        PropertyFactory.circleRadius(16f),
+                        PropertyFactory.circleRadius(17f),
                         PropertyFactory.circleStrokeColor(Color.WHITE),
-                        PropertyFactory.circleStrokeWidth(2f)
+                        PropertyFactory.circleStrokeWidth(3f)
                     )
                 )
                 // Araç simgesi -> baloncuğun ortasındaki araç ikonu.
                 loaded.addLayer(
                     SymbolLayer(VEHICLE_ICON_LAYER_ID, VEHICLES_SOURCE_ID).withProperties(
                         PropertyFactory.iconImage(VEHICLE_ICON_IMAGE_ID),
-                        PropertyFactory.iconSize(0.55f),
+                        PropertyFactory.iconSize(0.6f),
                         PropertyFactory.iconAllowOverlap(true),
                         PropertyFactory.iconIgnorePlacement(true)
                     )
                 )
-                // Fiyat etiketi -> baloncuğun altındaki metin.
-                loaded.addLayer(
-                    SymbolLayer(VEHICLE_PRICE_LAYER_ID, VEHICLES_SOURCE_ID).withProperties(
-                        PropertyFactory.textField(Expression.get("price")),
-                        PropertyFactory.textSize(11f),
-                        PropertyFactory.textColor(Color.WHITE),
-                        PropertyFactory.textOffset(arrayOf(0f, 1.4f)),
-                        PropertyFactory.textAllowOverlap(true),
-                        PropertyFactory.textIgnorePlacement(true)
-                    )
-                )
-
                 mapAndStyle = map to loaded
             }
         }
@@ -192,17 +193,26 @@ fun RencarMap(
         updateVehicles(style, vehicles)
     }
 
-    // İlk açılışta kullanıcı konumuna tek seferlik zoom.
-    var hasZoomedToUser by remember { mutableStateOf(false) }
-    LaunchedEffect(mapAndStyle, myLocation) {
-        if (hasZoomedToUser) return@LaunchedEffect
+    // İlk açılışta kameranın tek seferlik konumlanması -> kullanıcı konumu geldiyse ona,
+    // gelmediyse (izin reddedildiyse/GPS gecikirse) araç kümesinin tamamına odaklanır.
+    // Aksi halde kamera DEFAULT_CENTER'da asılı kalır ve araçlar ekranın dışında görünmez olur.
+    var hasFramedInitialView by remember { mutableStateOf(false) }
+    LaunchedEffect(mapAndStyle, myLocation, vehicles) {
+        if (hasFramedInitialView) return@LaunchedEffect
         val (map, _) = mapAndStyle ?: return@LaunchedEffect
-        val location = myLocation ?: return@LaunchedEffect
+        val points = buildList {
+            myLocation?.let { add(it.toLatLng()) }
+            addAll(vehicles.map { it.location.toLatLng() })
+        }
+        if (points.isEmpty()) return@LaunchedEffect
 
-        hasZoomedToUser = true
-        val zoom = 14.0
-        Log.d(TAG, "İlk zoom -> lat=${location.latitude}, lon=${location.longitude}, zoom=$zoom")
-        map.animateCamera(CameraUpdateFactory.newLatLngZoom(location.toLatLng(), zoom))
+        hasFramedInitialView = true
+        if (points.size == 1) {
+            map.animateCamera(CameraUpdateFactory.newLatLngZoom(points.first(), 14.0))
+        } else {
+            val bounds = LatLngBounds.Builder().includes(points).build()
+            map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 120))
+        }
     }
 
     // AndroidView -> Android ile @Composable köprüsü.

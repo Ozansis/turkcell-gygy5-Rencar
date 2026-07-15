@@ -41,7 +41,7 @@ private val bottomNavItems = listOf(
 
 @Composable
 fun MainScaffold(
-    onNavigateToVehicleDetail: (String) -> Unit = {}
+    onNavigateToVehicleDetail: (String, Int) -> Unit = { _, _ -> }
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()

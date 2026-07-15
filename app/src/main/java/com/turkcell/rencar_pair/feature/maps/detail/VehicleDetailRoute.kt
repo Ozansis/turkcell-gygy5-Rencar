@@ -1,23 +1,24 @@
 package com.turkcell.rencar_pair.feature.maps.detail
 
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun VehicleDetailRoute(
     vehicleId: String,
+    distanceMeters: Int,
     onNavigateBack: () -> Unit = {},
-    viewModel: VehicleDetailViewModel = viewModel(
-        factory = remember(vehicleId) { VehicleDetailViewModelFactory(vehicleId) }
+    viewModel: VehicleDetailViewModel = hiltViewModel<VehicleDetailViewModel, VehicleDetailViewModel.Factory>(
+        creationCallback = { factory -> factory.create(vehicleId, distanceMeters) }
     )
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
@@ -25,14 +26,10 @@ fun VehicleDetailRoute(
                 VehicleDetailContract.Effect.NavigateBack             -> onNavigateBack()
                 VehicleDetailContract.Effect.ShowReservationConfirmed -> Unit
                 VehicleDetailContract.Effect.ShowUnlockConfirmed      -> Unit
+                is VehicleDetailContract.Effect.ShowError             -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     VehicleDetailScreen(state = state, onIntent = viewModel::onIntent)
-}
-
-private class VehicleDetailViewModelFactory(private val vehicleId: String) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T = VehicleDetailViewModel(vehicleId) as T
 }

@@ -197,3 +197,201 @@
   kullanıldığından `ApiResult<T>` gibi daha nötr bir isme taşınabilir —
   ileride tüm kullanım yerlerini (Auth + Vehicles ViewModel'leri) tek
   bir batch'te güncellemek gerekir.
+
+### 2026-07-14 — Faz 5: MapsViewModel gerçek Vehicles API'sine bağlandı
+- **Ne yapıldı:** `MapsViewModel`, `@HiltViewModel` + `@Inject constructor(VehiclesRepository)`
+  olacak şekilde Hilt'e bağlandı. `loadVehicles()` artık `/vehicles?includeBusy=true`
+  ucunu çağırıyor (Login/Otp'teki `AuthResult` pattern matching deseniyle aynı);
+  hata durumunda yeni `MapsContract.Effect.ShowError` ile Toast gösteriliyor.
+  DTO→`NearbyVehicle` eşlemesi eklendi: `distanceMeters` mevcut haversine
+  fonksiyonuyla `myLocation`'a göre hesaplanıyor (konum yokken 0, konum her
+  değiştiğinde `handleLocationChanged` tüm listeyi yeniden hesaplıyor);
+  `tankLabel`, `fuelPercent`'ten türetiliyor. `MapsRoute.kt` `viewModel()` yerine
+  `hiltViewModel()` kullanıyor. `VehicleStatus` enum'ına `RESERVED` eklendi
+  (API `includeBusy=true` ile RESERVED/RENTED araçları da döndürüyor).
+- **Değişen dosyalar:** `feature/maps/MapsContract.kt`, `feature/maps/MapsViewModel.kt`,
+  `feature/maps/MapsRoute.kt`
+- **Neden bu şekilde yapıldı:** `tankLabel` eşiği API'de tanımlı olmadığından
+  mevcut mock veriden geriye doğru çıkarıldı (`>=70` Dolu, `>=30` Yarı dolu,
+  altı Az yakıt) — kullanıcı onayıyla kabul edildi. `type`/`status` DTO
+  string'i enum'a çevrilirken bilinmeyen bir değer gelirse (`runCatching` ile)
+  o araç listeden atlanıyor, çökme yerine sessizce dışlanıyor (dış API sınırı).
+  `MapsMockSource.kt` BİLİNÇLİ OLARAK SİLİNMEDİ: `VehicleDetailViewModel` hâlâ
+  ona bağımlı (`MapsMockSource.vehicles.find { it.id == vehicleId }`); bu
+  ekranın kendi konum akışı olmadan mock'u kaldırmak derlemeyi bozardı.
+  Kaldırma kullanıcı onayıyla Faz 6'ya ertelendi.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (yalnızca `hiltViewModel()`'in deprecated olduğuna dair,
+  projede zaten var olan bir uyarı — LoginRoute.kt'de de aynı uyarı mevcut).
+  Runtime/UI testi (haritada gerçek araçların görünmesi) henüz yapılmadı.
+- **Sıradaki adım:** Faz 6 — `VehicleDetailViewModel`'i `MapsMockSource`
+  yerine `VehiclesRepository.getVehicle(id)`'e bağlamak; bu ekranın kendi
+  konum akışı olmadığından `distanceMeters`/`canUnlock` hesaplaması için bir
+  çözüm (kendi konum akışı mı, yoksa Maps'ten devralınan bir değer mi)
+  netleştirilmeli. Ardından `MapsMockSource.kt` kaldırılabilir.
+
+### 2026-07-14 — Runtime debug: harita gerçek verisi + Faz 6 (VehicleDetailViewModel gerçek API'ye bağlandı)
+- **Ne yapıldı:** Faz 5 sonrası "haritada araç görünmüyor" şikayeti canlı
+  backend'e karşı runtime debug ile araştırıldı. Kök neden: kullanıcının test
+  ettiği `5550000000` numarası backend'de ADMIN rolünde kayıtlıydı; `/vehicles`
+  ucu yalnızca CUSTOMER rolüne açık olduğundan istekler 401/403 dönüyor, liste
+  boş kalıyordu (kod hatası değil, hesap rolü). Doğrulama için yeni bir test
+  kullanıcısı (`+905550000102`) register edilip sahte ehliyet foto'suyla
+  ADMIN token'ı üzerinden onaylandı (PENDING → CUSTOMER); bu hesapla
+  `/vehicles` 20 araç döndürdüğü doğrulandı. Ayrıca gerçek araçların (20 adet)
+  neredeyse tamamının İstanbul civarında olduğu, emülatörün varsayılan
+  konumunun oraya uzak olduğu tespit edildi; emülatör konumu `adb emu geo fix`
+  ile araç kümesine (40.98, 28.87) sabitlendi.
+  Bu sırada araç detay ekranının hâlâ sıfır veri gösterdiği fark edildi
+  (bkz. Faz 5 notu) — bu, planlanan Faz 6 olarak hemen uygulandı:
+  `VehicleDetailViewModel` artık `@HiltViewModel(assistedFactory=...)` +
+  `VehiclesRepository.getVehicle(id)` ile gerçek veri çekiyor. `distanceMeters`
+  bu ekranda canlı konum akışı kurmak yerine, kullanıcı haritada marker'a
+  tıkladığı andaki (Maps'te zaten hesaplanmış) değer navigasyon parametresi
+  olarak taşınıyor (`vehicle-detail/{vehicleId}/{distanceMeters}`).
+  `VehicleDetailContract.Effect.ShowError` eklendi (Toast). `MapsMockSource.kt`
+  artık hiçbir tüketicisi kalmadığından silindi.
+- **Değişen dosyalar:** `feature/maps/MapsContract.kt` (Effect'e distanceMeters
+  eklendi), `feature/maps/MapsViewModel.kt` (marker tıklama/en yakın araç artık
+  mesafeyi de effect'e taşıyor), `feature/maps/MapsRoute.kt`,
+  `navigation/MainScaffold.kt`, `navigation/RenCarNavHost.kt` (rota
+  `{distanceMeters}` argümanı aldı), `feature/maps/detail/VehicleDetailContract.kt`,
+  `feature/maps/detail/VehicleDetailViewModel.kt`,
+  `feature/maps/detail/VehicleDetailRoute.kt`,
+  `data/repository/VehiclesRepository.kt` (plandışı küçük ekleme: `getVehicle(id)`
+  sarmalayıcısı — `VehiclesApiService.getVehicle` zaten vardı ama repository
+  seviyesinde sarılmamıştı, VehicleDetailViewModel için gerekliydi),
+  `feature/maps/MapsMockSource.kt` (silindi).
+- **Neden bu şekilde yapıldı:** Kendi konum akışını (izin diyaloğu +
+  FusedLocationProviderClient) detay ekranında tekrar kurmak hem daha büyük
+  bir değişiklik hem de gereksiz bir ikinci konum aboneliği olurdu; mesafe
+  zaten Maps'te tıklama anında hesaplanmış olduğundan tek seferlik bir
+  navigasyon parametresi olarak taşımak yeterli ve mimari kurala (path segment
+  olarak basit tip) uygun. `tankLabel` türetme fonksiyonu MapsViewModel'dekiyle
+  aynı ama ayrı bir dosyada tutuldu (Login/Otp'teki ülke kodu tekrarı
+  emsaliyle tutarlı — bu ölçekte paylaşımlı bir yardımcı dosya açmak aşırı
+  soyutlama olurdu).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD
+  SUCCESSFUL. Gerçek backend'e karşı curl/PowerShell ile uçtan uca doğrulandı
+  (register → license upload → admin approve → /vehicles 20 kayıt döndü).
+  Emülatörde gerçek CUSTOMER hesabıyla (`5550000102`, kod `123456`) haritada
+  araçların göründüğü henüz uygulama içinden TEKRAR doğrulanmadı (bu oturumda
+  hesap az önce hazırlandı) — sıradaki oturumda ilk iş bu olmalı.
+- **Sıradaki adım:** Uygulamada `5550000102` ile giriş yapıp Haritalar
+  sekmesinde araçların göründüğünü ve bir araca tıklayınca detay ekranının artık
+  gerçek veriyle (sıfır değil) dolduğunu doğrulamak.
+- **Hatırlatma:** Test hesapları — ADMIN: `5550000000`; CUSTOMER: `5550000102`
+  (ikisi de OTP kodu `123456`). Emülatör konumu İstanbul'a sabitlendi
+  (`adb emu geo fix 28.87 40.98`), gerekirse tekrar ayarlanmalı.
+
+### 2026-07-15 — Kök neden bulundu: harita kamerası araç kümesine hiç gitmiyordu
+- **Ne yapıldı:** "Haritada araç markerları görünmüyor" şikayeti uçtan uca
+  araştırıldı. `RencarMap.kt`'de commit edilmemiş, yarım kalmış bir önceki
+  oturumdan kalma "TEŞHİS" bloğu bulundu (araç ikonu/fiyat `SymbolLayer`'ları
+  devre dışı bırakılmış, fazladan `Log.d` çağrıları eklenmiş) — bu, aynı
+  şikayetin daha önce de araştırıldığını ama sonuca bağlanmadığını gösteriyor.
+  Backend'e CUSTOMER token'ıyla doğrudan `curl` ile `/vehicles?includeBusy=true`
+  çağrıldı: 20 araç, doğru `type`/`status` enum değerleriyle dönüyor (veri
+  katmanında sorun yok). Ancak araçların gerçek konumu enlem 39.93–41.18,
+  boylam 28.72–32.86 aralığında (İstanbul-Kocaeli-Ankara koridoru), oysa
+  `RencarMap.kt`'deki `DEFAULT_CENTER` sabiti İzmir'e ayarlıydı (38.517,
+  27.162) ve kamera SADECE cihazın gerçek GPS konumu geldiğinde bir kereliğine
+  oraya zoom yapıyordu. Konum izni reddedilirse veya GPS fix hiç gelmezse
+  (emülatörde `dumpsys location` ile tüm sağlayıcılarda `last location=null`
+  olduğu doğrulandı — önceki oturumdaki `adb emu geo fix` ayarı emülatör
+  yeniden başlatıldığında sıfırlanmış) kamera hep İzmir'de asılı kalıyor,
+  araçlar ekranın 250+ km dışında kaldığından hiç görünmüyordu. Düzeltme:
+  `RencarMap.kt`'de kullanıcı konumu + tüm araç konumlarını kapsayan tek
+  seferlik bir `LatLngBounds` fit eklendi (`hasFramedInitialView`); konum
+  yoksa/gecikirse bile kamera araç kümesine odaklanıyor. TEŞHİS kodu
+  temizlendi, ikon/fiyat `SymbolLayer`'ları geri getirildi, kullanılmayan
+  `Log`/`TAG` kaldırıldı.
+- **Değişen dosyalar:** `feature/maps/RencarMap.kt`
+- **Neden bu şekilde yapıldı:** `DEFAULT_CENTER`'ı değiştirmek yerine
+  bounding-box fit tercih edildi — çünkü araçların gerçek konumu backend
+  verisine göre değişebilir (sabit bir şehre kilitlemek kırılgan olurdu);
+  bounding-box çözümü hem konum izni verilen hem verilmeyen kullanıcılarda
+  çalışıyor. Kullanıcı konumu sonradan gelirse ayrıca yeniden zoom
+  yapılmıyor (`hasFramedInitialView` tek seferlik) — kullanıcı o noktadan
+  sonra haritada serbestçe gezinebilsin diye kamera kontrolü geri
+  bırakılıyor (kullanıcı onayıyla kabul edildi).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Emülatör, test sırasında (login ekranındaki ayrı bir
+  UI sorunu nedeniyle yapılan manuel dokunma denemeleri sırasında oluşan
+  bir "System UI isn't responding" sonrası) kapandığından cihaz üzerinde
+  görsel doğrulama YAPILAMADI — kullanıcı kendisi doğrulayacak.
+- **Sıradaki adım:** Emülatörü/cihazı açıp `5550000102` ile giriş yapıp
+  Haritalar sekmesinde araçların artık göründüğünü doğrulamak.
+- **Hatırlatma (kapsam dışı, ayrı görev):** Login ekranındaki telefon
+  numarası alanına rakam girilirken (hem sistem klavyesi hem uygulama içi
+  tuş takımıyla, hıza bakmaksızın, tekrarlanabilir şekilde) son haneler
+  yanlış sırada yerleşiyor (örn. `...0102` yazılınca `...0210` görünüyor).
+  Muhtemelen özel bir `VisualTransformation`'ın `OffsetMapping`'inde
+  off-by-one. Kullanıcı isteğiyle bu oturumun kapsamı dışında bırakıldı.
+  Not: bu görünüşteki bug'ın etkisi sadece ekranda değil — API'ye giden
+  gerçek `phone` alanı da bozuk gidiyor (`+905550000210` gibi), yani
+  sadece bir `VisualTransformation` render sorunu değil, alttaki text
+  state de etkileniyor.
+
+### 2026-07-15 — Gerçek kök neden bulundu ve düzeltildi: harita stilinde eksik `glyphs` URL'si tüm araç katmanının render'ını bozuyordu
+- **Ne yapıldı:** Bir önceki oturumun "kamera araç kümesine gitmiyordu"
+  düzeltmesi kamerayı doğru konuma getirmiş olsa da, kullanıcı haritada
+  hâlâ hiçbir araç marker'ı göremediğini bildirdi. Bağlı emülatörde
+  (`emulator-5554`) canlı debug yapıldı: `/vehicles` API'si ve
+  `MapsViewModel` filtrelemesi doğru çalıştığı (bottom sheet'teki araç
+  sayısı her zaman doğruydu), kamera doğru konuma geldiği ve konum
+  noktasının (mavi nokta) sorunsuz render edildiği doğrulandı — yani sorun
+  veri katmanında değil, `RencarMap.kt`'nin çizim katmanındaydı. Geçici
+  `Log.d` satırlarıyla doğrulandı: `GeoJsonSource`'a araçlar başarıyla
+  yazılıyor (`features set=20`), tüm katmanlar (`circle`/`halo`/`icon`/
+  `price`) stile sorunsuz ekleniyor — ama ekranda hiçbir turuncu marker
+  çıkmıyor. Katmanları tek tek devre dışı bırakarak izole edildi: sadece
+  `VEHICLE_PRICE_LAYER_ID` (fiyat etiketi, `SymbolLayer` + `textField`)
+  kaldırıldığında circle/icon katmanları HEMEN render olmaya başladı.
+  Kök neden: `OSM_STYLE_JSON`'da (`MapsStyle.kt`) hiç `glyphs` URL'si
+  tanımlı değildi; metin içeren bir `SymbolLayer` glyph kaynağı olmadan
+  render edilmeye çalışılınca MapLibre native render thread'inde
+  `queryRenderedFeatures`/tile bucket'ı bozan bir hataya yol açıyor ve bu,
+  AYNI source'a bağlı circle/icon katmanlarını da (bazen, race'e bağlı
+  olarak — bu yüzden ilk denemede tutarsız görünüyordu) görünmez kılıyordu.
+  Önce `glyphs` alanına bir CDN (`fonts.openmaptiles.org`) eklenip fiyat
+  katmanı `textFont` ile geri açıldı, ama bu CDN'in PBF formatı MapLibre'nin
+  parser'ıyla uyuşmadığından `Mbgl: Failed to load glyph range ...:
+  unknown pbf field type exception` hatası verdi ve sorunu ÇÖZMEDİ (yine
+  tutarsız render'a yol açtı). Bunun yerine haritadaki fiyat etiketi
+  tamamen kaldırıldı (fiyat zaten alt listede/araç detayında gösteriliyor)
+  — harici bir glyph/font servisine bağımlılık, kırılgan ve gereksiz
+  olduğundan tercih edilmedi.
+- **Değişen dosyalar:** `feature/maps/RencarMap.kt` (`VEHICLE_PRICE_LAYER_ID
+  `SymbolLayer`'ı ve ilgili `Expression` import'u kaldırıldı),
+  `feature/maps/MapsStyle.kt` (net değişiklik yok — denenen `glyphs`
+  eklentisi işe yaramayınca geri alındı).
+- **Neden bu şekilde yapıldı:** Fiyatı harita üzerinde bir metin etiketi
+  olarak göstermek, tüm marker render'ının güvenilirliğini bir harici
+  glyph CDN'ine bağımlı kılıyordu (hem ağ gecikmesi hem format uyumsuzluğu
+  riskiyle); bu güvenilmezlik, uygulamanın ANA özelliği olan "haritada
+  araç görme"yi tehlikeye atıyordu. Fiyat bilgisi zaten alt araç
+  listesinde ve araç detay ekranında gösterildiğinden, haritadaki metin
+  etiketi kozmetik bir ekstraydı — kaldırılması özellik kaybı yaratmadı.
+- **Kendi kontrolüm:** `./gradlew :app:installDebug` ile birden fazla kez
+  kuruldu; bağlı emülatörde gerçek CUSTOMER hesabıyla (bozuk ama kayıtlı
+  numara `+905550000210` — bkz. yukarıdaki telefon input hatırlatması)
+  uçtan uca test edildi: temiz bir uygulama açılışında (fresh process)
+  turuncu araç marker'ları (halo+daire+araç ikonu) güvenilir şekilde
+  görüntülendi ve bir marker'a tıklayınca doğru `VehicleDetail` ekranına
+  (plaka/marka eşleşti) gidildiği doğrulandı.
+- **Yeni bulunan, kapsam dışı bırakılan sorun:** Haritadan bir araç
+  detayına gidip GERİ dönüldüğünde marker'lar bazen tekrar kayboluyor
+  (veri/tıklama hâlâ doğru — `queryRenderedFeatures` çalışıyor, sadece
+  paint olmuyor). Bu, PROGRESS.md'nin 2026-07-13 tarihli "'En Yakın Aracı
+  Bul' sonrası harita kayboluyor" notuyla aynı aileden, muhtemelen
+  `RencarMap`'in `mapView`'i her `MapsRoute` yeniden kompoze olduğunda
+  (geri navigasyonda) sıfırdan yaratmasıyla ilgili bir MapLibre native
+  render/invalidate zamanlama sorunu. Kullanıcının bu oturumdaki asıl
+  şikayeti (ilk açılışta hiç marker görünmemesi) çözüldüğünden ve bu ayrı
+  bir regresyon olduğundan, kapsam dışında bırakıldı.
+- **Sıradaki adım:** Geri navigasyondan sonra marker'ların kaybolması
+  sorununu araştırmak — muhtemelen `RencarMap`'te `MapView`'in
+  `rememberSaveable`/tek instance olacak şekilde nav-safe hale getirilmesi
+  veya geri dönüşte native render'ı tetikleyen bir `invalidate()` çağrısı
+  gerekebilir.
