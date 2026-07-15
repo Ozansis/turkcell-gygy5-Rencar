@@ -429,3 +429,82 @@
 - **Sıradaki adım:** Emülatörde/cihazda bir araca tıklayıp detay ekranında
   mini haritanın aracı doğru konumda gösterdiğini, konum izni verilmişse
   mavi noktanın da göründüğünü doğrulamak.
+
+### 2026-07-15 — Araç detay ekranına canlı konum (Socket.IO `/ws/locations`, `my-vehicle`) eklendi
+- **Ne yapıldı:** Bir PR yorumunda (`halitkalayci`) paylaşılan sözleşme
+  (`/ws/locations` namespace, handshake'te `auth.token`, yalnız müşterinin
+  aktif kiralamasındaki aracı bildiren `my-vehicle` event'i, aktif kiralama
+  yoksa event hiç gelmez) referans alınarak Araç Detay ekranındaki mini
+  haritanın araç konumu artık canlı güncelleniyor. Yeni `VehicleLocationSocketClient`
+  (`io.socket:socket.io-client:2.1.1`), `/ws/locations`'a bağlanıp `my-vehicle`
+  event'ini `Flow<VehicleLocationUpdate>` (vehicleId + GeoPoint) olarak
+  sunuyor. `VehicleDetailViewModel` bu akışı dinliyor, gelen `vehicleId`
+  ekranın kendi `vehicleId`'siyle eşleşirse `state.vehicleLocation`
+  güncelleniyor (eşleşmezse — kullanıcı başka bir aracı incelerken kendi
+  aktif kiralaması başka bir araçtaysa — yok sayılıyor).
+- **Değişen/yeni dosyalar:** `gradle/libs.versions.toml`, `app/build.gradle.kts`
+  (yeni bağımlılık: `io.socket:socket.io-client:2.1.1`),
+  `data/network/VehicleLocationSocketClient.kt` (yeni),
+  `feature/maps/detail/VehicleDetailViewModel.kt`
+  (`VehicleDetailContract.kt`'ye dokunulmadı — `vehicleLocation: GeoPoint?`
+  alanı zaten mevcuttu).
+- **Neden bu şekilde yapıldı:** Paylaşılan referans kod (`RideLocationClient.kt`)
+  bu depoyla uyuşmayan bir paket (`com.rencar.app.*`), var olmayan bir
+  `SessionManager` sınıfı ve var olmayan bir `VehiclePoint` modeli
+  kullanıyordu — Agent.md §2.2 (uydurma yasağı) gereği olduğu gibi
+  kopyalanmadı; sözleşme (event adı/payload şekli) korunarak proje mevcut
+  `GeoPoint`, `TokenStore.accessToken` (senkron property) ve
+  `AuthRepository.refresh()` (var olan token yenileme) üzerine kuruldu.
+  Token süresi dolduğunda tek seferlik yenileme + yeniden bağlanma denemesi
+  var; o da başarısız olursa akış sessizce kapanıyor (Effect/Toast YOK —
+  bu ekranda REST'ten gelen başlangıç konumu zaten gösterildiğinden,
+  canlı katmanın sessiz başarısız olması UX'i bozmuyor). Socket.IO istemci
+  versiyonu (2.1.1, Engine.IO v4 uyumlu) backend'in gerçek Socket.IO sunucu
+  sürümü teyit edilemediğinden varsayım olarak kullanıcı onayıyla seçildi;
+  bağlantı gerçek cihazda/backend'e karşı henüz doğrulanmadı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (yalnızca projede zaten var olan `hiltViewModel()`
+  deprecation uyarıları). Runtime/canlı bağlantı testi (gerçek bir aktif
+  kiralamayla `my-vehicle` event'inin gelip haritanın hareket ettiği)
+  HENÜZ YAPILMADI — bunun için müsait bir araçta gerçek bir kiralama
+  başlatmak gerekiyor.
+- **Sıradaki adım:** Bir CUSTOMER hesabıyla gerçek bir kiralama başlatıp
+  (rezervasyon → foto akışı → start) Araç Detay ekranını açık tutarak
+  backend'in `my-vehicle` event'i gönderdiğini ve mini haritadaki marker'ın
+  buna göre hareket ettiğini doğrulamak. Ayrıca socket.io-client 2.1.1'in
+  backend'in gerçek Socket.IO sürümüyle el sıkışabildiği runtime'da teyit
+  edilmeli.
+
+### 2026-07-15 — hiltViewModel() deprecation uyarısı tamamen giderildi
+- **Ne yapıldı:** Bir önceki girdide "zaten var olan uyarı" olarak not
+  edilen `hiltViewModel()` deprecation'ı araştırıldı: fonksiyon
+  `androidx.hilt:hilt-navigation-compose` paketinden yeni bir artifact'a
+  (`androidx.hilt:hilt-lifecycle-viewmodel-compose`, paket
+  `androidx.hilt.lifecycle.viewmodel.compose`) taşınmış — hem düz
+  `hiltViewModel()` hem de assisted-injection `creationCallback` overload'ı
+  yeni artifact'ta mevcut. Projede eski paket yalnızca `hiltViewModel()`
+  çağırmak için kullanıldığından (nav-graph scoping gibi başka bir
+  kullanım yoktu), eski bağımlılık kaldırılıp yenisiyle TAM değiştirildi;
+  4 Route dosyasındaki import güncellendi.
+- **Değişen dosyalar:** `gradle/libs.versions.toml` (`hiltNavigationCompose`
+  versiyon anahtarı `hiltLifecycleViewmodelCompose` olarak yeniden
+  adlandırıldı, kütüphane girdisi yeni artifact'a çevrildi),
+  `app/build.gradle.kts`, `feature/auth/login/LoginRoute.kt`,
+  `feature/auth/otp/OtpRoute.kt`, `feature/maps/MapsRoute.kt`,
+  `feature/maps/detail/VehicleDetailRoute.kt` (yalnızca import satırı).
+  6 dosya olduğundan Agent.md §2.1'deki 5 dosya limiti aşıldı; kullanıcıdan
+  ek onay alınarak tek batch'te uygulandı (değişiklikler birbirine sıkı
+  bağlı olduğundan bölünmesi yarım kalmış bir derleme riski doğururdu).
+- **Neden bu şekilde yapıldı:** Yeni versiyon numarası (1.4.0) mevcut
+  `hiltNavigationCompose` versiyon değeriyle aynı olduğundan (aynı
+  androidx.hilt release train) yeni bir versiyon anahtarı eklemek yerine
+  mevcut anahtar yeniden adlandırıldı — iki ayrı versiyon sabiti tutmak
+  gereksiz olurdu. Eski `hilt-navigation-compose` bağımlılığı projede
+  başka hiçbir yerde kullanılmadığından tamamen kaldırıldı (yanında
+  bırakmak kullanılmayan bir bağımlılık biriktirirdi).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. `hiltViewModel()` deprecation uyarıları tamamen
+  kayboldu; geriye yalnızca bu görevle ilgisiz, projede önceden var olan
+  `Icons.Filled.List` deprecation uyarısı kaldı.
+- **Sıradaki adım:** Yok — bu görev kapandı. Bir sonraki oturum, bir
+  önceki girdideki "canlı konum runtime testi" ile devam edebilir.

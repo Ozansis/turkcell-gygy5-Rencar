@@ -2,6 +2,7 @@ package com.turkcell.rencar_pair.feature.maps.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.turkcell.rencar_pair.data.network.VehicleLocationSocketClient
 import com.turkcell.rencar_pair.data.network.dto.VehicleResponseDto
 import com.turkcell.rencar_pair.data.repository.AuthResult
 import com.turkcell.rencar_pair.data.repository.VehiclesRepository
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -29,7 +31,8 @@ private const val HALF_TANK_THRESHOLD = 30.0
 class VehicleDetailViewModel @AssistedInject constructor(
     @Assisted private val vehicleId: String,
     @Assisted private val initialDistanceMeters: Int,
-    private val vehiclesRepository: VehiclesRepository
+    private val vehiclesRepository: VehiclesRepository,
+    private val vehicleLocationSocketClient: VehicleLocationSocketClient
 ) : ViewModel() {
 
     @AssistedFactory
@@ -45,6 +48,7 @@ class VehicleDetailViewModel @AssistedInject constructor(
 
     init {
         loadVehicle()
+        observeLiveVehicleLocation()
     }
 
     fun onIntent(intent: VehicleDetailContract.Intent) {
@@ -104,6 +108,15 @@ class VehicleDetailViewModel @AssistedInject constructor(
 
     private fun handleLocationChanged(location: GeoPoint) {
         _state.update { it.copy(myLocation = location) }
+    }
+
+    private fun observeLiveVehicleLocation() {
+        viewModelScope.launch {
+            vehicleLocationSocketClient.vehicleLocationUpdates().collect { update ->
+                if (update.vehicleId != vehicleId) return@collect
+                _state.update { it.copy(vehicleLocation = update.location) }
+            }
+        }
     }
 
     private fun sendEffect(effect: VehicleDetailContract.Effect) {
