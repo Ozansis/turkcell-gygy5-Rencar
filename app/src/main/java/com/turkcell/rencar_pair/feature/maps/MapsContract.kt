@@ -27,8 +27,9 @@ object MapsContract {
 
     sealed interface Effect {
         data object RequestLocationRefresh                        : Effect
-        data class NavigateToVehicleDetail(val vehicleId: String) : Effect
+        data class NavigateToVehicleDetail(val vehicleId: String, val distanceMeters: Int) : Effect
         data object ShowLocationPermissionDeniedMessage           : Effect
+        data class ShowError(val message: String)                 : Effect
     }
 }
 
@@ -39,7 +40,7 @@ data class GeoPoint(
 
 enum class VehicleType { SEDAN, SUV, HATCHBACK, STATION, MINIVAN }
 
-enum class VehicleStatus { AVAILABLE, RENTED, MAINTENANCE }
+enum class VehicleStatus { AVAILABLE, RESERVED, RENTED, MAINTENANCE }
 
 data class NearbyVehicle(
     val id: String,

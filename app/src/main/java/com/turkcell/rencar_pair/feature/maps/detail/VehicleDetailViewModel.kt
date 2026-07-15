@@ -2,7 +2,15 @@ package com.turkcell.rencar_pair.feature.maps.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.turkcell.rencar_pair.feature.maps.MapsMockSource
+import com.turkcell.rencar_pair.data.network.dto.VehicleResponseDto
+import com.turkcell.rencar_pair.data.repository.AuthResult
+import com.turkcell.rencar_pair.data.repository.VehiclesRepository
+import com.turkcell.rencar_pair.feature.maps.VehicleStatus
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlin.math.roundToInt
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,9 +20,22 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class VehicleDetailViewModel(private val vehicleId: String) : ViewModel() {
+private const val FULL_TANK_THRESHOLD = 70.0
+private const val HALF_TANK_THRESHOLD = 30.0
 
-    private val _state = MutableStateFlow(VehicleDetailContract.State())
+@HiltViewModel(assistedFactory = VehicleDetailViewModel.Factory::class)
+class VehicleDetailViewModel @AssistedInject constructor(
+    @Assisted private val vehicleId: String,
+    @Assisted private val initialDistanceMeters: Int,
+    private val vehiclesRepository: VehiclesRepository
+) : ViewModel() {
+
+    @AssistedFactory
+    interface Factory {
+        fun create(vehicleId: String, distanceMeters: Int): VehicleDetailViewModel
+    }
+
+    private val _state = MutableStateFlow(VehicleDetailContract.State(vehicleId = vehicleId, distanceMeters = initialDistanceMeters))
     val state: StateFlow<VehicleDetailContract.State> = _state.asStateFlow()
 
     private val _effect = Channel<VehicleDetailContract.Effect>(Channel.BUFFERED)
@@ -33,23 +54,34 @@ class VehicleDetailViewModel(private val vehicleId: String) : ViewModel() {
     }
 
     private fun loadVehicle() {
-        val vehicle = MapsMockSource.vehicles.find { it.id == vehicleId } ?: return
-        _state.update {
-            it.copy(
-                vehicleId      = vehicle.id,
-                brand          = vehicle.brand,
-                model          = vehicle.model,
-                plate          = vehicle.plate,
-                status         = vehicle.status,
-                distanceMeters = vehicle.distanceMeters,
-                fuelPercent    = vehicle.fuelPercent,
-                tankLabel      = vehicle.tankLabel,
-                rangeKm        = vehicle.rangeKm,
-                transmission   = vehicle.transmission,
-                seatCount      = vehicle.seatCount,
-                pricePerMinute = vehicle.pricePerMinute,
-                pricePerHour   = vehicle.pricePerHour
-            )
+        _state.update { it.copy(isLoading = true) }
+        viewModelScope.launch {
+            when (val result = vehiclesRepository.getVehicle(vehicleId)) {
+                is AuthResult.Success -> {
+                    val vehicle = result.data
+                    val vehicleStatus = runCatching { VehicleStatus.valueOf(vehicle.status) }.getOrNull()
+                    _state.update {
+                        it.copy(
+                            isLoading      = false,
+                            brand          = vehicle.brand,
+                            model          = vehicle.model,
+                            plate          = vehicle.plate,
+                            status         = vehicleStatus ?: it.status,
+                            fuelPercent    = vehicle.fuelPercent.roundToInt(),
+                            tankLabel      = tankLabel(vehicle.fuelPercent),
+                            rangeKm        = vehicle.rangeKm.roundToInt(),
+                            transmission   = vehicle.transmission,
+                            seatCount      = vehicle.seats,
+                            pricePerMinute = vehicle.pricePerMinute,
+                            pricePerHour   = vehicle.pricePerHour
+                        )
+                    }
+                }
+                is AuthResult.Error -> {
+                    _state.update { it.copy(isLoading = false) }
+                    sendEffect(VehicleDetailContract.Effect.ShowError(result.message))
+                }
+            }
         }
     }
 
@@ -65,5 +97,11 @@ class VehicleDetailViewModel(private val vehicleId: String) : ViewModel() {
 
     private fun sendEffect(effect: VehicleDetailContract.Effect) {
         viewModelScope.launch { _effect.send(effect) }
+    }
+
+    private fun tankLabel(fuelPercent: Double): String = when {
+        fuelPercent >= FULL_TANK_THRESHOLD -> "Dolu depo"
+        fuelPercent >= HALF_TANK_THRESHOLD -> "Yarı dolu depo"
+        else -> "Az yakıt"
     }
 }

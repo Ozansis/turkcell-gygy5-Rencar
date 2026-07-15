@@ -24,4 +24,18 @@ class VehiclesRepository @Inject constructor(
             AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
         }
     }
+
+    suspend fun getVehicle(id: String): AuthResult<VehicleResponseDto> {
+        return try {
+            val response = vehiclesApiService.getVehicle(id)
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                AuthResult.Success(body)
+            } else {
+                AuthResult.Error(response.code(), "Sunucu hatası (kod: ${response.code()}).")
+            }
+        } catch (e: IOException) {
+            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
+        }
+    }
 }

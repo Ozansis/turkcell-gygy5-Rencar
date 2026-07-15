@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.os.Looper
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -16,7 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -28,10 +29,10 @@ import org.maplibre.android.geometry.LatLng
 
 @Composable
 fun MapsRoute(
-    onNavigateToVehicleDetail: (String) -> Unit = {},
+    onNavigateToVehicleDetail: (String, Int) -> Unit = { _, _ -> },
     onLocationPermissionStatusChanged: (Boolean) -> Unit = {},
     permissionRequestTrigger: Int = 0,
-    viewModel: MapsViewModel = viewModel()
+    viewModel: MapsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
@@ -114,8 +115,9 @@ fun MapsRoute(
                         )
                     }
                 }
-                is MapsContract.Effect.NavigateToVehicleDetail -> onNavigateToVehicleDetail(effect.vehicleId)
+                is MapsContract.Effect.NavigateToVehicleDetail -> onNavigateToVehicleDetail(effect.vehicleId, effect.distanceMeters)
                 MapsContract.Effect.ShowLocationPermissionDeniedMessage -> Unit
+                is MapsContract.Effect.ShowError -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
             }
         }
     }

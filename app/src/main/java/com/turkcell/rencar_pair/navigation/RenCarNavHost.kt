@@ -24,10 +24,10 @@ private object RenCarDestinations {
     const val SELFIE_VERIFICATION = "selfie-verification"
     const val CONFIRMATION = "confirmation"
     const val HOME = "home"
-    const val VEHICLE_DETAIL = "vehicle-detail/{vehicleId}"
+    const val VEHICLE_DETAIL = "vehicle-detail/{vehicleId}/{distanceMeters}"
 
     fun otpRoute(phoneNumber: String) = "otp/$phoneNumber"
-    fun vehicleDetailRoute(vehicleId: String) = "vehicle-detail/$vehicleId"
+    fun vehicleDetailRoute(vehicleId: String, distanceMeters: Int) = "vehicle-detail/$vehicleId/$distanceMeters"
 }
 
 @Composable
@@ -118,19 +118,24 @@ fun RenCarNavHost() {
 
         composable(RenCarDestinations.HOME) {
             MainScaffold(
-                onNavigateToVehicleDetail = { vehicleId ->
-                    navController.navigate(RenCarDestinations.vehicleDetailRoute(vehicleId))
+                onNavigateToVehicleDetail = { vehicleId, distanceMeters ->
+                    navController.navigate(RenCarDestinations.vehicleDetailRoute(vehicleId, distanceMeters))
                 }
             )
         }
 
         composable(
             route     = RenCarDestinations.VEHICLE_DETAIL,
-            arguments = listOf(navArgument("vehicleId") { type = NavType.StringType })
+            arguments = listOf(
+                navArgument("vehicleId") { type = NavType.StringType },
+                navArgument("distanceMeters") { type = NavType.IntType }
+            )
         ) { backStackEntry ->
             val vehicleId = backStackEntry.arguments?.getString("vehicleId").orEmpty()
+            val distanceMeters = backStackEntry.arguments?.getInt("distanceMeters") ?: 0
             VehicleDetailRoute(
                 vehicleId      = vehicleId,
+                distanceMeters = distanceMeters,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
