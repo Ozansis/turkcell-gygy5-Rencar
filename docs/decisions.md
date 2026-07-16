@@ -80,3 +80,13 @@ Projede verilen bütün mimarisel-teknik kararları ve karar geçmişini içeren
   dependency graph'ına tam olarak entegre olur.
 
 - Referans: `app/src/main/java/com/turkcell/rencar_pair/feature/auth/otp/OtpRoute.kt`
+
+
+
+### Karar: Nav-Graph-Scoped Paylaşılan ViewModel'ler MVI Contract Kullanmaz
+LicenseFlowViewModel gibi birden fazla ekran arasında ham state paylaşan
+ViewModel'ler (klasik ekran ViewModel'i değil, "veri havuzu" rolünde),
+Intent/Effect sözleşmesi olmadan doğrudan fonksiyon çağrılarıyla kontrol
+edilir. Sebep: bu ViewModel'ler doğrudan bir Screen'e bağlı değil, birden
+fazla ekranın ortak kullandığı geçici state taşıyıcısı — MVI'nin "tek
+ekran, tek Contract" varsayımı burada uygulanmaz.

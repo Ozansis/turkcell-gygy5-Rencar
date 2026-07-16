@@ -668,3 +668,49 @@
   gibi diğer dosyalarda da zaten var olan genel bir Kotlin gelecek-uyumluluk
   uyarısı, bu değişiklikle ilgisiz). Yeni dosyalar henüz hiçbir ViewModel'den
   çağrılmadığından runtime/network testi bu batch'te YAPILAMADI.
+
+### 2026-07-16 — Ehliyet+Selfie akışı için nav-graph-scoped paylaşılan ViewModel altyapısı (2 dosya)
+- **Ne yapıldı:** Bir önceki batch'te (network/repository katmanı) kullanıcıyla
+  üzerinde anlaşılan mimari karar uygulandı: `feature/auth/LicenseFlowViewModel.kt`
+  (yeni) — `frontUri`/`backUri`/`selfieUri` (üçü de `Uri?`) tutan bir
+  `@HiltViewModel`, üçü de doluyken `LicenseRepository.upload()`'ı çağıran
+  `uploadIfReady()` fonksiyonu içeriyor. `RenCarNavHost.kt`'de `LICENSE_VERIFICATION`
+  ve `SELFIE_VERIFICATION` route'ları `navigation(startDestination=..., route="license-flow")`
+  ile bir nav-graph altında gruplandı; her iki composable bloğu içinde
+  `navController.getBackStackEntry("license-flow")` + `hiltViewModel(viewModelStoreOwner=parentEntry)`
+  deseniyle paylaşılan `LicenseFlowViewModel` örneği alınıyor. `ConfirmationRoute`
+  bilinçli olarak bu nav-graph'ın DIŞINDA bırakıldı (kendi başına `GET /license/status`
+  çağıracağı için paylaşılan state'e bağımlı değil). `LicenseViewModel`/`SelfieViewModel`
+  ve bunların Route'ları bu batch'te KASITLI OLARAK DEĞİŞTİRİLMEDİ — paylaşılan
+  ViewModel şu an her iki composable bloğunda alınıyor ama Route'lara parametre
+  olarak geçilmiyor (yalnızca scoping mekanizmasının derlendiği/çalıştığı kanıtlandı).
+- **Değişen dosyalar (yeni):** `feature/auth/LicenseFlowViewModel.kt`.
+  **Değişen dosya:** `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** `LicenseFlowViewModel`, `feature/auth/license/` veya
+  `feature/auth/selfie/` yerine domain kökü `feature/auth/`'a konuldu — çünkü tek bir
+  feature'a değil, `auth` domain'i içindeki iki feature'a birden ait paylaşılan bir
+  "veri havuzu". Kullanıcının bu batch'ten önce `docs/decisions.md`'ye eklediği
+  "Nav-Graph-Scoped Paylaşılan ViewModel'ler MVI Contract Kullanmaz" kararı gereği bu
+  ViewModel'de Intent/Effect YOK, doğrudan fonksiyon çağrılarıyla (`setFrontUri`,
+  `setBackUri`, `setSelfieUri`, `uploadIfReady`) kontrol ediliyor — yalnızca State
+  (`_state`/`state` MutableStateFlow/StateFlow çifti, projenin genel deseniyle
+  tutarlı). `uploadIfReady()`, `LoginViewModel.handleSendCode()`'daki mevcut
+  `AuthResult.Success`/`AuthResult.Error` tüketim desenini birebir tekrar ediyor
+  (`isUploading`/`isUploaded`/`uploadError` state alanlarını güncelliyor). `Uri`'lerin
+  nav argümanı olarak taşınması (önceki batch'te reddedilen alternatif) yine
+  kullanılmadı. `CONFIRMATION` composable'ı nav-graph dışında bırakıldığından
+  Register/OTP'nin mevcut `navigate(LICENSE_VERIFICATION)` çağrıları DEĞİŞMEDİ —
+  Compose Navigation iç içe bir grafiğin child route'una doğrudan navigasyonu
+  native destekliyor.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD
+  SUCCESSFUL (Hilt/KSP grafiği `LicenseFlowViewModel` → `LicenseRepository`
+  enjeksiyonuyla sorunsuz üretildi; `hiltViewModel(viewModelStoreOwner=parentEntry)`
+  çağrısı derleme hatası vermeden `NavBackStackEntry`'yi kabul etti). Görülen tek iki
+  uyarı bu değişiklikle ilgisiz, projede önceden var olan uyarılar (`LicenseRepository.kt`
+  `@ApplicationContext` hedef uyarısı, `BottomNavItem.kt` `Icons.Filled.List`
+  deprecation). Beklenen bir "unused variable" (`licenseFlowViewModel`) uyarısı
+  derleyici çıktısında GÖRÜNMEDİ ama kod hâlâ kullanılmıyor — bu bilinçli ve geçici,
+  sonraki batch Route imzalarına parametre eklediğinde ortadan kalkacak. Emülatör/cihazda
+  runtime testi (License→Selfie→Confirmation akışının önceki davranışla birebir aynı
+  çalıştığı, geri/ileri navigasyonda aynı `LicenseFlowViewModel` örneğinin korunduğu)
+  bu batch'te YAPILAMADI.
