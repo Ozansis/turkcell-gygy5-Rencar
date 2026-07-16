@@ -552,3 +552,85 @@
   `Icons.Filled.List` deprecation uyarısı kaldı.
 - **Sıradaki adım:** Yok — bu görev kapandı. Bir sonraki oturum, bir
   önceki girdideki "canlı konum runtime testi" ile devam edebilir.
+
+### 2026-07-16 — Splash ekranı + başlangıç yönlendirme mantığı (5 dosya)
+- **Ne yapıldı:** Uygulama açılışında Home/Onboarding/Login kararını veren bir
+  Splash özelliği sıfırdan eklendi: `data/local/OnboardingPreferences.kt`
+  (DataStore tabanlı `hasSeenOnboarding` okuma/yazma), `feature/splash/`
+  altında `SplashContract.kt` (State/boş Intent/3 Effect), `SplashViewModel.kt`
+  (`TokenStore` + `OnboardingPreferences` inject edilen `@HiltViewModel`),
+  `SplashScreen.kt` (statik logo + uygulama adı, animasyonsuz) ve
+  `SplashRoute.kt` (`hiltViewModel()` ile 3 effect'i 3 nav callback'ine
+  bağlıyor). Karar mantığı: `async`/`await` ile 800ms minimum gecikme ve
+  gerçek token/onboarding kontrolü paralel çalışıyor, ikisi de bitmeden effect
+  gönderilmiyor. NavHost'a bağlama ve `OnboardingViewModel`'in
+  `hasSeenOnboarding` yazma mantığı bilinçli olarak KAPSAM DIŞI bırakıldı
+  (kullanıcı onayıyla, ayrı bir sonraki batch).
+- **Değişen dosyalar (yeni):** `data/local/OnboardingPreferences.kt`,
+  `feature/splash/SplashContract.kt`, `feature/splash/SplashViewModel.kt`,
+  `feature/splash/SplashScreen.kt`, `feature/splash/SplashRoute.kt`.
+- **Neden bu şekilde yapıldı:** `OnboardingPreferences`, `TokenStore.kt`'nin
+  izlediği desenin (private top-level `Context.xDataStore` delegate +
+  `@Singleton @Inject constructor(@ApplicationContext)`) birebir aynısı, ama
+  `TokenStore`'daki `AtomicReference` bellek önbelleklemesi BİLİNÇLİ OLARAK
+  eklenmedi — o önbellekleme yalnızca senkron çalışan `AuthInterceptor`
+  yüzünden gerekliydi, `OnboardingPreferences`'ın böyle bir senkron
+  tüketicisi yok. `SplashContract.Intent` boş sealed interface bırakıldı
+  (Splash kullanıcıdan hiç girdi almıyor) ama mvi-contracts.md'nin
+  Route/Screen imza kuralına uymak için tip olarak korundu. Token geçerliliği
+  `tokenStore.accessToken != null && tokenStore.readRefreshToken() != null`
+  ile kontrol ediliyor — bu, token'ın VAR olduğunu gösterir, SÜRESİNİN
+  DOLMADIĞINI değil; bu bilinçli bir sınırlama, `AuthInterceptor`'ın 401
+  sonrası refresh mekanizmasının süresi dolmuş durumu telafi edeceği
+  varsayılıyor (kullanıcı onayıyla kabul edildi — bkz. aşağıdaki bilinen
+  sınırlama). `TokenStore.kt`'ye DOKUNULMADI (bu batch'in 5 dosya limitine
+  dahil değildi, mevcut `accessToken`/`readRefreshToken()` yeterliydi).
+  Logo için `R.mipmap.ic_launcher_foreground` denendi ama bu bir
+  `drawable` kaynağı olduğundan derleme hatası verdi (`Unresolved
+  reference`); `R.mipmap.ic_launcher` ile değiştirildi.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (Hilt/KSP grafiği `SplashViewModel` → `TokenStore` +
+  `OnboardingPreferences` enjeksiyonuyla sorunsuz üretildi). NavHost'a
+  bağlanmadığından runtime/UI testi bu oturumda YAPILAMADI (bilinçli
+  olarak sıradaki NavHost-bağlama batch'ine bırakıldı).
+- **Bilinen sınırlama (sıradaki NavHost batch'inde not edilmeli):** Süresi
+  dolmuş ama hâlâ diskte/bellekte duran bir `accessToken` ile açılışta
+  yanlışlıkla Home'a yönlendirme riski var — `resolveDestination()` token'ın
+  sadece VARLIĞINA bakıyor, JWT süresine bakmıyor.
+
+### 2026-07-16 — Splash NavHost'a bağlandı + Onboarding "bir daha gösterme" kaydı (3 dosya)
+- **Ne yapıldı:** `RenCarNavHost.kt`'de `startDestination` `ONBOARDING`'den
+  `SPLASH`'e değiştirildi; yeni `composable(SPLASH)` bloğu `SplashRoute`'un
+  3 effect'ini (`onNavigateToHome`/`onNavigateToOnboarding`/`onNavigateToLogin`)
+  ilgili hedeflere bağladı, üçü de `popUpTo(SPLASH){inclusive=true}` kullanıyor
+  (geri tuşuyla Splash'e dönüp döngüye girme riskini önlemek için).
+  `OnboardingViewModel`, `OnboardingPreferences` inject eden bir
+  `@HiltViewModel`'e çevrildi; `handlePrimaryAction()` artık son sayfada
+  `NavigateToLogin` effect'ini göndermeden ÖNCE
+  `onboardingPreferences.setHasSeenOnboarding(true)` çağırıyor (aynı
+  `viewModelScope.launch` bloğu içinde, sıralama garantili).
+- **Değişen dosyalar:** `navigation/RenCarNavHost.kt`,
+  `feature/onboarding/OnboardingViewModel.kt`,
+  `feature/onboarding/OnboardingRoute.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcı bu batch'i 2 dosyayla talep etmişti
+  (NavHost + OnboardingViewModel), ama `OnboardingViewModel`'i Hilt'e
+  taşımak (constructor'a `OnboardingPreferences` enjekte edebilmek için)
+  `OnboardingRoute.kt`'nin de `androidx.lifecycle.viewmodel.compose.viewModel()`
+  (no-arg reflection factory) yerine `hiltViewModel()` kullanmasını teknik
+  olarak ZORUNLU kılıyordu — aksi halde runtime'da constructor bulunamadığı
+  için çökerdi. Bu, uygulamaya geçmeden önce kullanıcıya açıkça sunuldu ve
+  3. dosya olarak onaylandı. `Onboarding`'in kullanılmayan `NavigateToHome`
+  effect'ine (talimat gereği) dokunulmadı. Splash'tan çıkan üç yönün de
+  `popUpTo(SPLASH)` kullanması, kullanıcının önceki batch'te onayladığı
+  planın "ÖNEMLİ" notuyla birebir örtüşüyor.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (Hilt/KSP grafiği `OnboardingViewModel` →
+  `OnboardingPreferences` enjeksiyonuyla sorunsuz üretildi). Emülatör/cihazda
+  uçtan uca runtime testi (Splash → Onboarding/Login/Home akışının gerçekten
+  çalıştığı, "bir daha gösterme" bayrağının kalıcı olduğu) bu oturumda
+  YAPILMADI.
+- **Hatırlatma (önceki batch'ten taşınan, hâlâ geçerli bilinen sınırlama):**
+  `SplashViewModel.resolveDestination()` token'ın yalnızca VARLIĞINA bakıyor,
+  JWT süresinin dolup dolmadığına bakmıyor; süresi dolmuş bir token'la
+  açılışta yanlışlıkla Home'a düşme riski hâlâ mevcut, bu batch'te
+  çözülmedi.

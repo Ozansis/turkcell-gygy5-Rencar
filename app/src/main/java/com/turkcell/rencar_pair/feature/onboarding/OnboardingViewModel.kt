@@ -5,6 +5,9 @@ import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Shield
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.turkcell.rencar_pair.data.local.OnboardingPreferences
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +17,10 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class OnboardingViewModel : ViewModel() {
+@HiltViewModel
+class OnboardingViewModel @Inject constructor(
+    private val onboardingPreferences: OnboardingPreferences
+) : ViewModel() {
 
     private val _state = MutableStateFlow(
         OnboardingContract.State(
@@ -45,7 +51,10 @@ class OnboardingViewModel : ViewModel() {
 
     private fun handlePrimaryAction() {
         if (_state.value.isLastPage) {
-            sendEffect(OnboardingContract.Effect.NavigateToLogin)
+            viewModelScope.launch {
+                onboardingPreferences.setHasSeenOnboarding(true)
+                sendEffect(OnboardingContract.Effect.NavigateToLogin)
+            }
         } else {
             _state.update { it.copy(currentPage = it.currentPage + 1) }
         }
