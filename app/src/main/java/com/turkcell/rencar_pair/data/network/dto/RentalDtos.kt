@@ -35,6 +35,20 @@ data class RentalResponseDto(
     val createdAt: String
 )
 
+data class RentalPhotoDto(
+    val side: String,
+    val imageUrl: String,
+    val createdAt: String
+)
+
+data class RentalPhotosStateDto(
+    val rentalId: String,
+    val photos: List<RentalPhotoDto>,
+    val uploadedCount: Int,
+    val remainingSides: List<String>,
+    val photosComplete: Boolean
+)
+
 data class ActiveRentalResponseDto(
     val id: String,
     val userId: String,

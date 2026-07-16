@@ -19,6 +19,7 @@ import com.turkcell.rencar_pair.feature.auth.selfie.SelfieRoute
 import com.turkcell.rencar_pair.feature.maps.detail.VehicleDetailRoute
 import com.turkcell.rencar_pair.feature.onboarding.OnboardingRoute
 import com.turkcell.rencar_pair.feature.rental.active.ActiveRentalRoute
+import com.turkcell.rencar_pair.feature.rental.photos.VehiclePhotosRoute
 import com.turkcell.rencar_pair.feature.rental.reservation.ReservationConfirmationRoute
 import com.turkcell.rencar_pair.feature.splash.SplashRoute
 
@@ -36,11 +37,13 @@ private object RenCarDestinations {
     const val VEHICLE_DETAIL = "vehicle-detail/{vehicleId}/{distanceMeters}"
     const val RESERVATION_CONFIRMATION = "reservation-confirmation/{vehicleId}"
     const val RENTAL_ACTIVE = "rental-active/{rentalId}"
+    const val VEHICLE_PHOTOS = "vehicle-photos/{rentalId}/{vehicleId}"
 
     fun otpRoute(phoneNumber: String) = "otp/$phoneNumber"
     fun vehicleDetailRoute(vehicleId: String, distanceMeters: Int) = "vehicle-detail/$vehicleId/$distanceMeters"
     fun reservationConfirmationRoute(vehicleId: String) = "reservation-confirmation/$vehicleId"
     fun rentalActiveRoute(rentalId: String) = "rental-active/$rentalId"
+    fun vehiclePhotosRoute(rentalId: String, vehicleId: String) = "vehicle-photos/$rentalId/$vehicleId"
 }
 
 @Composable
@@ -207,6 +210,11 @@ fun RenCarNavHost() {
                     navController.navigate(RenCarDestinations.rentalActiveRoute(rentalId)) {
                         popUpTo(RenCarDestinations.HOME)
                     }
+                },
+                onNavigateToVehiclePhotos = { rentalId, vId ->
+                    navController.navigate(RenCarDestinations.vehiclePhotosRoute(rentalId, vId)) {
+                        popUpTo(RenCarDestinations.HOME)
+                    }
                 }
             )
         }
@@ -221,6 +229,27 @@ fun RenCarNavHost() {
                 onNavigateToHome = {
                     navController.navigate(RenCarDestinations.HOME) {
                         popUpTo(RenCarDestinations.HOME) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(
+            route     = RenCarDestinations.VEHICLE_PHOTOS,
+            arguments = listOf(
+                navArgument("rentalId") { type = NavType.StringType },
+                navArgument("vehicleId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val rentalId = backStackEntry.arguments?.getString("rentalId").orEmpty()
+            val vehicleId = backStackEntry.arguments?.getString("vehicleId").orEmpty()
+            VehiclePhotosRoute(
+                rentalId   = rentalId,
+                vehicleId  = vehicleId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToActiveRental = { activeRentalId ->
+                    navController.navigate(RenCarDestinations.rentalActiveRoute(activeRentalId)) {
+                        popUpTo(RenCarDestinations.HOME)
                     }
                 }
             )
