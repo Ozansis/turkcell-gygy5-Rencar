@@ -1,11 +1,15 @@
 package com.turkcell.rencar_pair.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.turkcell.rencar_pair.feature.auth.LicenseFlowViewModel
 import com.turkcell.rencar_pair.feature.auth.confirmation.ConfirmationRoute
 import com.turkcell.rencar_pair.feature.auth.license.LicenseRoute
 import com.turkcell.rencar_pair.feature.auth.login.LoginRoute
@@ -22,6 +26,7 @@ private object RenCarDestinations {
     const val LOGIN = "login"
     const val REGISTER = "register"
     const val OTP = "otp/{phoneNumber}"
+    const val LICENSE_FLOW_GRAPH = "license-flow"
     const val LICENSE_VERIFICATION = "license-verification"
     const val SELFIE_VERIFICATION = "selfie-verification"
     const val CONFIRMATION = "confirmation"
@@ -109,22 +114,41 @@ fun RenCarNavHost() {
             )
         }
 
-        composable(RenCarDestinations.LICENSE_VERIFICATION) {
-            LicenseRoute(
-                onNavigateToHome = {
-                    navController.navigate(RenCarDestinations.SELFIE_VERIFICATION)
-                },
-                onNavigateBack = { navController.popBackStack() }
-            )
-        }
+        navigation(
+            startDestination = RenCarDestinations.LICENSE_VERIFICATION,
+            route            = RenCarDestinations.LICENSE_FLOW_GRAPH
+        ) {
+            composable(RenCarDestinations.LICENSE_VERIFICATION) { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry(RenCarDestinations.LICENSE_FLOW_GRAPH)
+                }
+                val licenseFlowViewModel: LicenseFlowViewModel =
+                    hiltViewModel(viewModelStoreOwner = parentEntry)
 
-        composable(RenCarDestinations.SELFIE_VERIFICATION) {
-            SelfieRoute(
-                onNavigateToConfirmation = {
-                    navController.navigate(RenCarDestinations.CONFIRMATION)
-                },
-                onNavigateBack = { navController.popBackStack() }
-            )
+                LicenseRoute(
+                    licenseFlowViewModel = licenseFlowViewModel,
+                    onNavigateToHome = {
+                        navController.navigate(RenCarDestinations.SELFIE_VERIFICATION)
+                    },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(RenCarDestinations.SELFIE_VERIFICATION) { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry(RenCarDestinations.LICENSE_FLOW_GRAPH)
+                }
+                val licenseFlowViewModel: LicenseFlowViewModel =
+                    hiltViewModel(viewModelStoreOwner = parentEntry)
+
+                SelfieRoute(
+                    licenseFlowViewModel = licenseFlowViewModel,
+                    onNavigateToConfirmation = {
+                        navController.navigate(RenCarDestinations.CONFIRMATION)
+                    },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
 
         composable(RenCarDestinations.CONFIRMATION) {

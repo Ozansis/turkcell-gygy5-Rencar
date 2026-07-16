@@ -634,3 +634,221 @@
   JWT süresinin dolup dolmadığına bakmıyor; süresi dolmuş bir token'la
   açılışta yanlışlıkla Home'a düşme riski hâlâ mevcut, bu batch'te
   çözülmedi.
+
+### 2026-07-16 — Ehliyet + Selfie doğrulama: network/repository katmanı (4 dosya)
+- **Ne yapıldı:** `docs/api/openapi.json`'daki `POST /license/upload` (front+back+selfie,
+  üçü de zorunlu, tek istekte multipart) ve `GET /license/status` uçları için
+  Retrofit sözleşmesi kuruldu: `LicenseResponseDto`/`LicenseStatusResponseDto`,
+  `LicenseApiService` (projenin ilk `@Multipart` kullanımı), bunu sağlayan
+  `NetworkModule.provideLicenseApiService`, ve `AuthRepository`'deki
+  `AuthResult<T>` desenini yeniden kullanan `LicenseRepository`
+  (`upload(front: Uri, back: Uri, selfie: Uri)`, `getStatus()`). UI/ekran
+  değişiklikleri, kamera/galeri seçici entegrasyonu ve ConfirmationScreen
+  bilinçli olarak KAPSAM DIŞI bırakıldı.
+- **Değişen dosyalar (yeni):** `data/network/dto/LicenseDtos.kt`,
+  `data/network/LicenseApiService.kt`, `data/repository/LicenseRepository.kt`.
+  **Değişen dosya:** `di/NetworkModule.kt` (`provideLicenseApiService` eklendi).
+- **Neden bu şekilde yapıldı:** `status` alanı, kullanıcı onayıyla projenin
+  `role`/`type`/`transmission`/`status` konvansiyonuyla tutarlı olarak Kotlin
+  enum değil `String` tutuldu (backend yeni bir status değeri döndürürse Gson
+  deserialization'ının çökmesini önlemek için). `LicenseStatusResponseDto`'da
+  openapi şemasına uygun olarak `selfieImageUrl` YOK (yalnız `LicenseResponseDto`'da
+  var). `Uri`→`MultipartBody.Part` dönüşümü için `LicenseRepository`'ye
+  `@ApplicationContext Context` inject edildi (`TokenStore`'un zaten kullandığı
+  desenle tutarlı); `ContentResolver.openInputStream` `Dispatchers.IO` üzerinde
+  okunuyor (ana thread'i bloklamamak için). Görsellerin üç ekranda toplanıp son
+  ekranda birleştirilmesi için gereken state paylaşım mekanizması bu batch'te
+  UYGULANMADI; kullanıcıyla nav-graph-scoped paylaşılan bir ViewModel
+  (`getBackStackEntry` + `hiltViewModel(viewModelStoreOwner=...)`) üzerinde
+  anlaşıldı — `Uri`'lerin nav argümanı olarak taşınması (URI izin kaybı/encode
+  kırılganlığı riski nedeniyle) tercih edilmedi; somutlaştırma sonraki
+  UI-bağlama batch'ine bırakıldı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD
+  SUCCESSFUL (tek uyarı: `@ApplicationContext` ile ilgili, projede `TokenStore.kt`
+  gibi diğer dosyalarda da zaten var olan genel bir Kotlin gelecek-uyumluluk
+  uyarısı, bu değişiklikle ilgisiz). Yeni dosyalar henüz hiçbir ViewModel'den
+  çağrılmadığından runtime/network testi bu batch'te YAPILAMADI.
+
+### 2026-07-16 — Ehliyet+Selfie akışı için nav-graph-scoped paylaşılan ViewModel altyapısı (2 dosya)
+- **Ne yapıldı:** Bir önceki batch'te (network/repository katmanı) kullanıcıyla
+  üzerinde anlaşılan mimari karar uygulandı: `feature/auth/LicenseFlowViewModel.kt`
+  (yeni) — `frontUri`/`backUri`/`selfieUri` (üçü de `Uri?`) tutan bir
+  `@HiltViewModel`, üçü de doluyken `LicenseRepository.upload()`'ı çağıran
+  `uploadIfReady()` fonksiyonu içeriyor. `RenCarNavHost.kt`'de `LICENSE_VERIFICATION`
+  ve `SELFIE_VERIFICATION` route'ları `navigation(startDestination=..., route="license-flow")`
+  ile bir nav-graph altında gruplandı; her iki composable bloğu içinde
+  `navController.getBackStackEntry("license-flow")` + `hiltViewModel(viewModelStoreOwner=parentEntry)`
+  deseniyle paylaşılan `LicenseFlowViewModel` örneği alınıyor. `ConfirmationRoute`
+  bilinçli olarak bu nav-graph'ın DIŞINDA bırakıldı (kendi başına `GET /license/status`
+  çağıracağı için paylaşılan state'e bağımlı değil). `LicenseViewModel`/`SelfieViewModel`
+  ve bunların Route'ları bu batch'te KASITLI OLARAK DEĞİŞTİRİLMEDİ — paylaşılan
+  ViewModel şu an her iki composable bloğunda alınıyor ama Route'lara parametre
+  olarak geçilmiyor (yalnızca scoping mekanizmasının derlendiği/çalıştığı kanıtlandı).
+- **Değişen dosyalar (yeni):** `feature/auth/LicenseFlowViewModel.kt`.
+  **Değişen dosya:** `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** `LicenseFlowViewModel`, `feature/auth/license/` veya
+  `feature/auth/selfie/` yerine domain kökü `feature/auth/`'a konuldu — çünkü tek bir
+  feature'a değil, `auth` domain'i içindeki iki feature'a birden ait paylaşılan bir
+  "veri havuzu". Kullanıcının bu batch'ten önce `docs/decisions.md`'ye eklediği
+  "Nav-Graph-Scoped Paylaşılan ViewModel'ler MVI Contract Kullanmaz" kararı gereği bu
+  ViewModel'de Intent/Effect YOK, doğrudan fonksiyon çağrılarıyla (`setFrontUri`,
+  `setBackUri`, `setSelfieUri`, `uploadIfReady`) kontrol ediliyor — yalnızca State
+  (`_state`/`state` MutableStateFlow/StateFlow çifti, projenin genel deseniyle
+  tutarlı). `uploadIfReady()`, `LoginViewModel.handleSendCode()`'daki mevcut
+  `AuthResult.Success`/`AuthResult.Error` tüketim desenini birebir tekrar ediyor
+  (`isUploading`/`isUploaded`/`uploadError` state alanlarını güncelliyor). `Uri`'lerin
+  nav argümanı olarak taşınması (önceki batch'te reddedilen alternatif) yine
+  kullanılmadı. `CONFIRMATION` composable'ı nav-graph dışında bırakıldığından
+  Register/OTP'nin mevcut `navigate(LICENSE_VERIFICATION)` çağrıları DEĞİŞMEDİ —
+  Compose Navigation iç içe bir grafiğin child route'una doğrudan navigasyonu
+  native destekliyor.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD
+  SUCCESSFUL (Hilt/KSP grafiği `LicenseFlowViewModel` → `LicenseRepository`
+  enjeksiyonuyla sorunsuz üretildi; `hiltViewModel(viewModelStoreOwner=parentEntry)`
+  çağrısı derleme hatası vermeden `NavBackStackEntry`'yi kabul etti). Görülen tek iki
+  uyarı bu değişiklikle ilgisiz, projede önceden var olan uyarılar (`LicenseRepository.kt`
+  `@ApplicationContext` hedef uyarısı, `BottomNavItem.kt` `Icons.Filled.List`
+  deprecation). Beklenen bir "unused variable" (`licenseFlowViewModel`) uyarısı
+  derleyici çıktısında GÖRÜNMEDİ ama kod hâlâ kullanılmıyor — bu bilinçli ve geçici,
+  sonraki batch Route imzalarına parametre eklediğinde ortadan kalkacak. Emülatör/cihazda
+  runtime testi (License→Selfie→Confirmation akışının önceki davranışla birebir aynı
+  çalıştığı, geri/ileri navigasyonda aynı `LicenseFlowViewModel` örneğinin korunduğu)
+  bu batch'te YAPILAMADI.
+
+### 2026-07-16 — Ehliyet görsel seçici altyapısı: Coil + FileProvider (Batch 1, 4 dosya)
+- **Ne yapıldı:** LicenseScreen'i gerçek kamera/galeri seçiciye bağlamanın ön koşulu
+  olan altyapı kuruldu: Coil 3 (`coil-compose`) bağımlılığı eklendi (projenin ilk
+  görsel önizleme kütüphanesi) ve kamera çekimi için `androidx.core.content.FileProvider`
+  tanımlandı (`AndroidManifest.xml`'e `<provider>` + `res/xml/file_paths.xml`'e
+  `cache-path`). İlk denemede Coil 3.5.0 seçilmişti ama bu sürüm Kotlin 2.4.0 ile
+  derlenmiş `kotlin-stdlib`'i transitive olarak çekiyor; projenin Kotlin derleyicisi
+  (2.2.10) bu metadata sürümünü okuyamadığından `compileDebugKotlin` "incompatible
+  metadata version" hatasıyla çöktü. Coil'in resmi değişiklik geçmişi kontrol edilerek
+  Kotlin 2.2.0 ile derlenmiş Coil 3.3.0'a düşürüldü, derleme sorunsuz geçti.
+- **Değişen dosyalar:** `gradle/libs.versions.toml` (coil versiyonu + `coil-compose`
+  kütüphane girdisi), `app/build.gradle.kts` (`implementation(libs.coil.compose)`),
+  `app/src/main/AndroidManifest.xml` (`FileProvider` provider tanımı,
+  `${applicationId}.fileprovider` authority). **Yeni dosya:** `app/src/main/res/xml/file_paths.xml`
+  (`cache-path name="license_images" path="license_images/"`).
+- **Neden bu şekilde yapıldı:** FileProvider'ın kamera fotoğraflarını `cacheDir/license_images/`
+  altına yazması tercih edildi (kalıcı depolama gerekmiyor, `Selfie`/upload batch'i
+  bu dosyaları yükledikten sonra ihtiyaç kalmıyor). Coil'in `coil3.compose.AsyncImage`
+  API'si (paket adı Coil 2'den farklı olarak `coil3` oldu) yerel `content://`/`file://`
+  Uri'lerini ek bir network modülüne (`coil-network-*`) gerek kalmadan çözebildiğinden
+  bu batch'te sadece `coil-compose` eklendi. Kamera için `CAMERA` izni eklenmedi:
+  `ActivityResultContracts.TakePicture()` örtük intent ile sistem kamera uygulamasını
+  açıyor, izni o uygulama kendi yönetiyor. Galeri için de `READ_EXTERNAL_STORAGE`
+  eklenmedi: `PickVisualMedia` sistem foto seçici olduğundan scoped-storage'a tabi değil.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ve ardından tam
+  `./gradlew :app:assembleDebug` ile derlendi, ikisi de BUILD SUCCESSFUL. Birleştirilmiş
+  manifest dosyası (`app/build/intermediates/merged_manifest/debug/.../AndroidManifest.xml`)
+  okunarak `<provider>` girdisinin `authorities="com.turkcell.rencar_pair.fileprovider"`
+  olarak doğru birleştiği doğrulandı. Runtime/UI testi (gerçek kamera/galeri açma) bu
+  batch'te kapsam dışı — henüz hiçbir Route bu altyapıyı çağırmıyor (Batch 2'nin işi).
+
+### 2026-07-16 — LicenseScreen gerçek kamera/galeri seçiciye bağlandı (Batch 2, 5 dosya)
+- **Ne yapıldı:** `LicenseContract.State`'teki `isFrontUploaded`/`isBackUploaded` artık
+  ayrı boolean alanlar değil, `frontUri`/`backUri: Uri?` alanlarından türetilen computed
+  property (varsayılan `true` hatası bu şekilde kökten düzeldi — `Uri` varsayılan `null`
+  olduğundan `isFrontUploaded` varsayılan `false`). Yeni `isContinueEnabled` computed
+  property eklendi (ikisi de dolu değilse `false`); "Devam Et" butonu artık buna göre
+  `enabled` oluyor ve `handleContinue()`'a guard clause eklendi. Yeni Intent'ler
+  (`PickFrontImage`/`PickBackImage` → dialog tetikler, `FrontImageSelected`/
+  `BackImageSelected(uri)` → seçim sonucu State'e yazar) ve Effect'ler
+  (`ShowFrontImageSourceDialog`/`ShowBackImageSourceDialog`) eklendi. `LicenseScreen`'de
+  önceden salt-okunur olan ön yüz satırı, arka yüzle aynı tıklanabilir dropzone'a
+  çevrildi; ikisi de dolu olduğunda Coil `AsyncImage` ile gerçek küçük resim önizlemesi
+  gösteriyor (üstte "Yüklendi" rozeti overlay). `LicenseRoute`, artık zorunlu
+  `licenseFlowViewModel: LicenseFlowViewModel` parametresi alıyor;
+  `ActivityResultContracts.TakePicture`/`PickVisualMedia` launcher'ları, basit bir
+  `AlertDialog` ("Kameradan Çek" / "Galeriden Seç") ve seçilen `Uri`'yi hem
+  `licenseFlowViewModel.setFrontUri()/setBackUri()`'ye (Selfie batch'inin de okuyacağı
+  paylaşılan state) hem `viewModel.onIntent(...ImageSelected(uri))`'ye (bu ekranın kendi
+  önizleme state'i) yazan köprü mantığı eklendi. `RenCarNavHost.kt`'de daha önce alınıp
+  hiç geçilmeyen `licenseFlowViewModel` artık `LicenseRoute(...)`'a parametre olarak
+  veriliyor.
+- **Değişen dosyalar:** `feature/auth/license/LicenseContract.kt`,
+  `feature/auth/license/LicenseViewModel.kt`, `feature/auth/license/LicenseScreen.kt`,
+  `feature/auth/license/LicenseRoute.kt`, `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** Kamera/galeri seçimi platform (Activity) düzeyinde bir
+  kaygı olduğundan (`registerForActivityResult`, `FileProvider`) bu mantık ViewModel'e
+  değil Route'a kondu — ViewModel yalnızca "hangi taraf için dialog gösterilsin" kararını
+  Effect ile iletiyor, dialogdan sonra gerçek launcher çağrısı Route'ta kalıyor; bu,
+  mvi-overview.md'nin Route'a verdiği "ViewModel ile köprü" rolüyle tutarlı. Seçilen
+  `Uri` bilinçli olarak İKİ yere birden yazılıyor: `LicenseFlowViewModel` (üç ekran
+  arasında paylaşılan, upload'da kullanılacak kalıcı kaynak — önceki batch'te kurulan
+  mimari karar) ve `LicenseContract.State` (bu ekranın kendi Coil önizlemesi için) —
+  tekrar gibi görünse de ikisinin sorumluluğu farklı ve `LicenseViewModel`'in
+  `LicenseFlowViewModel`'e bağımlı olması (farklı ViewModelStore scope'ları nedeniyle)
+  teknik olarak pratik değildi. Kullanıcıyla netleştirilen karar gereği "Devam Et"
+  butonunun ön/arka yüz olmadan aktif kalması bu batch'te kapatıldı; selfie'nin kendi
+  butonu Selfie batch'inin kapsamında kalacak. `AlertDialog`'da "Galeriden Seç"
+  `dismissButton` slotuna kondu (iptal değil, ikinci gerçek seçenek) — ayrı bir custom
+  dialog yazmak bu ölçekte gereksiz olurdu.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ve tam `./gradlew :app:assembleDebug`
+  ile derlendi, ikisi de BUILD SUCCESSFUL, yeni uyarı yok. Emülatör/cihazda runtime/UI
+  testi (kamera açma, galeri seçme, önizlemenin gerçekten göründüğü, "Devam Et"in
+  disabled/enabled geçişi) bu oturumda YAPILAMADI — sadece derleme ve manifest birleştirme
+  doğrulandı.
+
+### 2026-07-16 — SelfieScreen gerçek kameraya + LicenseFlowViewModel'e bağlandı, gerçek upload tetikleniyor (Batch 1, 5 dosya)
+- **Ne yapıldı:** `SelfieContract.State`'teki sahte `isSelfieUploaded: Boolean`
+  (tıklamayla anında `true` olan) kaldırıldı; yerine `selfieUri: Uri?`,
+  `isUploading: Boolean`, `uploadError: String?` ve `isContinueEnabled`
+  computed property'si eklendi. Yeni Intent'ler: `CaptureSelfie` (kamerayı
+  tetikler — galeri seçeneği YOK, selfie için sadece kamera anlamlı),
+  `SelfieImageSelected(uri)`, `UploadStateChanged(isUploading, isUploaded,
+  uploadError)` (bu sonuncusu `VehicleDetailContract.Intent.LocationChanged`
+  ile aynı desende: Route'un başka bir ViewModel'den — burada
+  `LicenseFlowViewModel` — okuduğu state'i kendi ViewModel'ine ilettiği
+  köprü Intent'i). `SelfieRoute`, artık zorunlu `licenseFlowViewModel`
+  parametresi alıyor, License batch'indeki desenle birebir aynı
+  `TakePicture` + `FileProvider` kamera akışını kuruyor (dialog YOK, doğrudan
+  kamera açılıyor), çekilen `Uri`'yi hem `licenseFlowViewModel.setSelfieUri()`'ye
+  hem kendi `SelfieViewModel`'ine yazıyor, `licenseFlowViewModel.state`'i
+  `LaunchedEffect` ile izleyip `UploadStateChanged` Intent'iyle senkronize
+  ediyor. "Devam Et" tıklanınca `TriggerUpload` effect'i Route'ta
+  `licenseFlowViewModel.uploadIfReady()`'i çağırıyor; `isUploading` true iken
+  buton disabled + `CircularProgressIndicator`, `isUploaded` true olunca
+  otomatik Confirmation'a navigate, `uploadError` doluysa mevcut
+  Login/Otp/Maps/VehicleDetail deseniyle aynı Toast gösteriliyor (dead-end
+  effect bırakılmadı). `SelfieScreen`'deki dropzone artık Coil `AsyncImage`
+  ile gerçek selfie önizlemesi gösteriyor. `RenCarNavHost.kt`'de daha önce
+  alınıp hiç geçilmeyen `licenseFlowViewModel`, `SelfieRoute`'a parametre
+  olarak verildi.
+- **Değişen dosyalar:** `feature/auth/selfie/SelfieContract.kt`,
+  `feature/auth/selfie/SelfieViewModel.kt`, `feature/auth/selfie/SelfieRoute.kt`,
+  `feature/auth/selfie/SelfieScreen.kt`, `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcıyla üzerinde anlaşıldığı üzere ortak
+  bir `ui/components/ImageSourcePicker.kt` soyutlaması BİLİNÇLİ OLARAK bu
+  batch'e alınmadı — çıkarılacak olsa bile `LicenseRoute.kt`'nin de o ortak
+  dosyayı kullanacak şekilde refactor edilmesi gerekiyordu (aksi halde tek
+  tüketicili bir soyutlama olurdu), bu da Batch 1'i 5 dosya sınırının üstüne
+  çıkarırdı (Agent.md §2.1). Bunun yerine kamera/`FileProvider` mantığı bu
+  batch'te `SelfieRoute.kt` içinde License'daki desenin geçici bir kopyası
+  olarak yazıldı; ortak dosyaya çıkarma + `LicenseRoute.kt` refactor'ü ayrı,
+  kullanıcının bu batch derlenip test edildikten sonra ayrıca onaylayacağı
+  bir Batch 2 olarak planlandı (henüz UYGULANMADI). Selfie'nin çekilen
+  fotoğrafı, yeni bir `selfie_images` FileProvider cache-path'i eklemek
+  yerine (bu da `file_paths.xml`'e dokunup dosya sayısını 6'ya çıkarırdı)
+  bilinçli olarak mevcut `cacheDir/license_images/` dizinine `selfie_` dosya
+  adı önekiyle yazıldı — bu dizin adı yalnızca bir önbellek klasörü ismi,
+  kullanıcıya hiçbir şekilde görünmüyor. 413 (dosya çok büyük) gibi ayırt
+  edici bir hata mesajı için `LicenseRepository.kt`'ye dokunma seçeneği
+  kullanıcıya soruldu; kullanıcı 5 dosyada kalmayı ve mevcut jenerik "Sunucu
+  hatası (kod: N)." mesaj desenini korumayı tercih etti — `LicenseRepository.kt`
+  bu batch'te DEĞİŞMEDİ. Hata gösterimi için Snackbar yerine mevcut Toast
+  deseni (Login/Otp/Maps/VehicleDetail'deki `ShowError` ile aynı) kullanıldı
+  — Snackbar, projede hiçbir ekranda kurulu olmayan bir `SnackbarHostState`/
+  `Scaffold` altyapısı gerektirdiğinden büyük bir sapma olurdu.
+  `SelfieViewModel`, `LicenseFlowViewModel`'e constructor'dan inject
+  EDİLMEDİ — nav-graph scoping'i olmayan bir ViewModel'in nav-graph-scoped
+  bir ViewModel'e doğrudan bağımlı olması pratik değil (License batch'inde
+  `LicenseViewModel`/`LicenseFlowViewModel` için verilen kararla aynı
+  gerekçe); köprüleme tamamen `SelfieRoute.kt`'de kaldı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ve tam
+  `./gradlew :app:assembleDebug` ile derlendi, ikisi de BUILD SUCCESSFUL, yeni
+  uyarı yok. Emülatör/cihazda runtime/UI testi (gerçek kamera açma, selfie
+  önizlemesinin göründüğü, "Devam Et"in loading/disabled geçişi, gerçek
+  upload'ın Confirmation'a yönlendirdiği, hata Toast'ının göründüğü) bu
+  oturumda YAPILAMADI — sadece derleme doğrulandı.

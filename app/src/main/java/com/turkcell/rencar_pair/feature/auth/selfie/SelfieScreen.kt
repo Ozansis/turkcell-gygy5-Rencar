@@ -1,5 +1,6 @@
 package com.turkcell.rencar_pair.feature.auth.selfie
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -33,8 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.turkcell.rencar_pair.ui.components.StepIndicator
 
 @Composable
@@ -80,8 +84,8 @@ fun SelfieScreen(
             Spacer(Modifier.height(28.dp))
 
             SelfieDropzone(
-                isUploaded = state.isSelfieUploaded,
-                onClick    = { onIntent(SelfieContract.Intent.UploadSelfie) }
+                selfieUri = state.selfieUri,
+                onClick   = { onIntent(SelfieContract.Intent.CaptureSelfie) }
             )
 
             Spacer(Modifier.height(20.dp))
@@ -92,6 +96,7 @@ fun SelfieScreen(
 
             Button(
                 onClick   = { onIntent(SelfieContract.Intent.Continue) },
+                enabled   = state.isContinueEnabled,
                 modifier  = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -101,11 +106,19 @@ fun SelfieScreen(
                 ),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
             ) {
-                Text(
-                    text  = "Devam Et",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White
-                )
+                if (state.isUploading) {
+                    CircularProgressIndicator(
+                        modifier    = Modifier.size(20.dp),
+                        color       = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text  = "Devam Et",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White
+                    )
+                }
             }
 
             Spacer(Modifier.height(24.dp))
@@ -137,20 +150,32 @@ private fun BackButton(onClick: () -> Unit) {
 
 @Composable
 private fun SelfieDropzone(
-    isUploaded: Boolean,
+    selfieUri: Uri?,
     onClick: () -> Unit
 ) {
-    if (isUploaded) {
+    if (selfieUri != null) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(220.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center
+                .clickable(onClick = onClick)
         ) {
-            UploadedBadge()
+            AsyncImage(
+                model              = selfieUri,
+                contentDescription = "Selfie önizlemesi",
+                modifier           = Modifier.fillMaxSize(),
+                contentScale       = ContentScale.Crop
+            )
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+            ) {
+                UploadedBadge()
+            }
         }
         return
     }

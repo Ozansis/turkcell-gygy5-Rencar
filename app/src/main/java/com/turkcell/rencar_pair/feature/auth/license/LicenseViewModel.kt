@@ -1,5 +1,6 @@
 package com.turkcell.rencar_pair.feature.auth.license
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.channels.Channel
@@ -21,17 +22,25 @@ class LicenseViewModel : ViewModel() {
 
     fun onIntent(intent: LicenseContract.Intent) {
         when (intent) {
-            LicenseContract.Intent.UploadBackSide -> handleUploadBackSide()
-            LicenseContract.Intent.Continue        -> handleContinue()
-            LicenseContract.Intent.NavigateBack    -> sendEffect(LicenseContract.Effect.NavigateBack)
+            LicenseContract.Intent.PickFrontImage        -> sendEffect(LicenseContract.Effect.ShowFrontImageSourceDialog)
+            LicenseContract.Intent.PickBackImage         -> sendEffect(LicenseContract.Effect.ShowBackImageSourceDialog)
+            is LicenseContract.Intent.FrontImageSelected -> handleFrontImageSelected(intent.uri)
+            is LicenseContract.Intent.BackImageSelected  -> handleBackImageSelected(intent.uri)
+            LicenseContract.Intent.Continue              -> handleContinue()
+            LicenseContract.Intent.NavigateBack          -> sendEffect(LicenseContract.Effect.NavigateBack)
         }
     }
 
-    private fun handleUploadBackSide() {
-        _state.update { it.copy(isBackUploaded = true) }
+    private fun handleFrontImageSelected(uri: Uri) {
+        _state.update { it.copy(frontUri = uri) }
+    }
+
+    private fun handleBackImageSelected(uri: Uri) {
+        _state.update { it.copy(backUri = uri) }
     }
 
     private fun handleContinue() {
+        if (!_state.value.isContinueEnabled) return
         sendEffect(LicenseContract.Effect.NavigateToHome)
     }
 
