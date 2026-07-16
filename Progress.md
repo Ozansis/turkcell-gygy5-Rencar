@@ -1051,3 +1051,47 @@
   `./gradlew :app:installDebug` ile derlenip emülatöre kuruldu, BUILD
   SUCCESSFUL. Kullanıcı emülatörde canlı backend'e karşı akışı bizzat test
   etti (giriş, harita, araç listesi, Kilidi Aç/Rezerve Et etkileşimi).
+
+
+### 2026-07-17 — Araç Teslim Fotoğrafı (4 yön) ekranı + Dakikalık/Saatlik akışının tamamlanması (11 dosya, 3 batch)
+- **Ne yapıldı:** Daha önce kapsam dışı bırakılan foto akışı eklendi. Verilen
+  tasarıma (Ön/Arka/Sol/Sağ 2x2 kare, "X / 4 çekildi" sayacı, hasar uyarı
+  banner'ı, alt "Kiralamayı Başlat · N foto kaldı" butonu) birebir yeni
+  `feature/rental/photos/` paketi eklendi. `RentalsApiService`/`RentalsRepository`'ye
+  `POST /rentals/{id}/photos` (multipart: `side` + `file`), `GET /rentals/{id}/photos`
+  (yarım kalan akışı devralmak için) ve `POST /rentals/{id}/start` eklendi.
+  `ReservationConfirmationViewModel`, Dakikalık/Saatlik planlarda artık
+  sadece rezervasyon oluşturup geri dönmüyor — rezervasyon sonrası
+  `POST /rentals` ile kiralamayı PREPARING durumunda açıp yeni foto ekranına
+  yönlendiriyor. 4 fotoğrafın tamamı yüklenince "Kiralamayı Başlat" aktifleşip
+  `POST /rentals/{id}/start` çağırıyor ve mevcut Aktif Kiralama ekranına
+  geçiyor — böylece Dakikalık/Saatlik planlar da artık DAILY gibi uçtan uca
+  çalışıyor.
+- **Değişen dosyalar:** Batch A — `data/network/dto/RentalDtos.kt`,
+  `data/network/RentalsApiService.kt`, `data/repository/RentalsRepository.kt`
+  (hepsi düzenlendi: `RentalPhotoDto`/`RentalPhotosStateDto` + 3 yeni endpoint).
+  Batch B (yeni) — `feature/rental/photos/VehiclePhotosContract.kt`,
+  `VehiclePhotosViewModel.kt`, `VehiclePhotosRoute.kt`, `VehiclePhotosScreen.kt`.
+  Batch C — `navigation/RenCarNavHost.kt` (`vehicle-photos/{rentalId}/{vehicleId}`
+  route'u eklendi), `feature/rental/reservation/ReservationConfirmationContract.kt`
+  (`NavigateBackWithMessage` kaldırıldı, `NavigateToVehiclePhotos` eklendi),
+  `ReservationConfirmationViewModel.kt` (`createUsageRental` eklendi),
+  `ReservationConfirmationRoute.kt`.
+- **Neden bu şekilde yapıldı:** Kamera/`FileProvider` akışı, License/Selfie
+  batch'lerindeki AYNI desen tekrar kullanılarak yazıldı (`TakePicture` +
+  mevcut `cacheDir/license_images/` önbellek klasörüne `delivery_<yön>_`
+  dosya adı önekiyle yazma) — yeni bir FileProvider `cache-path` eklemek
+  `AndroidManifest.xml`/`file_paths.xml`'e dokunup dosya sayısını artırırdı,
+  Selfie batch'inde de aynı gerekçeyle bu yol tercih edilmişti. `@AssistedInject`'te
+  iki `String` tipli assisted parametre (`rentalId`, `vehicleId`) olduğu için
+  KSP derleme hatası verdi ("duplicate @Assisted type"); `@Assisted("rentalId")`/
+  `@Assisted("vehicleId")` kimlikleriyle çözüldü. Zaten yüklenmiş fotoğraflar
+  `GET /rentals/{id}/photos`'un döndürdüğü uzak `imageUrl`'ler `Uri.parse()`
+  ile doğrudan `AsyncImage`'e veriliyor (Coil hem yerel hem uzak URI'leri aynı
+  şekilde yükleyebiliyor) — böylece uygulama yeniden açılırsa yarım kalan akış
+  devralınabiliyor, ayrı bir "resume" mantığı yazmaya gerek kalmadı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` (her 3 batch
+  sonunda) ve `./gradlew :app:installDebug` BUILD SUCCESSFUL, emülatöre
+  kuruldu. Emülatörde gerçek kamera + gerçek `POST /rentals/{id}/photos`
+  yükleme akışı bu oturumda henüz TEST EDİLMEDİ — kullanıcı tarafından
+  ayrıca doğrulanacak.

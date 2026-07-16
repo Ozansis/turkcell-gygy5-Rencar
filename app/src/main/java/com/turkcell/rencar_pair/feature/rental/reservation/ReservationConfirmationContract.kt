@@ -42,9 +42,9 @@ object ReservationConfirmationContract {
     }
 
     sealed interface Effect {
-        data object NavigateBack                                    : Effect
-        data class NavigateToActiveRental(val rentalId: String)     : Effect
-        data class NavigateBackWithMessage(val message: String)     : Effect
-        data class ShowError(val message: String)                   : Effect
+        data object NavigateBack                                                       : Effect
+        data class NavigateToActiveRental(val rentalId: String)                        : Effect
+        data class NavigateToVehiclePhotos(val rentalId: String, val vehicleId: String) : Effect
+        data class ShowError(val message: String)                                      : Effect
     }
 }

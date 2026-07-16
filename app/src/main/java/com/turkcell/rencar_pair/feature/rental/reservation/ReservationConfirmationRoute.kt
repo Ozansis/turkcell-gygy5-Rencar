@@ -13,6 +13,7 @@ fun ReservationConfirmationRoute(
     vehicleId: String,
     onNavigateBack: () -> Unit = {},
     onNavigateToActiveRental: (String) -> Unit = {},
+    onNavigateToVehiclePhotos: (String, String) -> Unit = { _, _ -> },
     viewModel: ReservationConfirmationViewModel = hiltViewModel<ReservationConfirmationViewModel, ReservationConfirmationViewModel.Factory>(
         creationCallback = { factory -> factory.create(vehicleId) }
     )
@@ -23,13 +24,10 @@ fun ReservationConfirmationRoute(
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
             when (effect) {
-                ReservationConfirmationContract.Effect.NavigateBack                    -> onNavigateBack()
-                is ReservationConfirmationContract.Effect.NavigateToActiveRental       -> onNavigateToActiveRental(effect.rentalId)
-                is ReservationConfirmationContract.Effect.NavigateBackWithMessage -> {
-                    Toast.makeText(context, effect.message, Toast.LENGTH_LONG).show()
-                    onNavigateBack()
-                }
-                is ReservationConfirmationContract.Effect.ShowError                    -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+                ReservationConfirmationContract.Effect.NavigateBack              -> onNavigateBack()
+                is ReservationConfirmationContract.Effect.NavigateToActiveRental -> onNavigateToActiveRental(effect.rentalId)
+                is ReservationConfirmationContract.Effect.NavigateToVehiclePhotos -> onNavigateToVehiclePhotos(effect.rentalId, effect.vehicleId)
+                is ReservationConfirmationContract.Effect.ShowError              -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
             }
         }
     }

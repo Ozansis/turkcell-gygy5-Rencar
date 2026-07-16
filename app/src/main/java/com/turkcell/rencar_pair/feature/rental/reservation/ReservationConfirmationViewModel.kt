@@ -125,12 +125,7 @@ class ReservationConfirmationViewModel @AssistedInject constructor(
                     if (current.selectedPlan == ReservationConfirmationContract.RentalPlan.DAILY) {
                         createDailyRental()
                     } else {
-                        _state.update { it.copy(isSubmitting = false) }
-                        sendEffect(
-                            ReservationConfirmationContract.Effect.NavigateBackWithMessage(
-                                "Rezervasyon oluşturuldu. Aracın yanına giderek kiralamayı başlatabilirsiniz."
-                            )
-                        )
+                        createUsageRental(current.selectedPlan)
                     }
                 }
                 is AuthResult.Error -> {
@@ -147,6 +142,19 @@ class ReservationConfirmationViewModel @AssistedInject constructor(
             is AuthResult.Success -> {
                 _state.update { it.copy(isSubmitting = false) }
                 sendEffect(ReservationConfirmationContract.Effect.NavigateToActiveRental(rentalResult.data.id))
+            }
+            is AuthResult.Error -> {
+                _state.update { it.copy(isSubmitting = false) }
+                sendEffect(ReservationConfirmationContract.Effect.ShowError(rentalResult.message))
+            }
+        }
+    }
+
+    private suspend fun createUsageRental(plan: ReservationConfirmationContract.RentalPlan) {
+        when (val rentalResult = rentalsRepository.createRental(vehicleId, plan.name)) {
+            is AuthResult.Success -> {
+                _state.update { it.copy(isSubmitting = false) }
+                sendEffect(ReservationConfirmationContract.Effect.NavigateToVehiclePhotos(rentalResult.data.id, vehicleId))
             }
             is AuthResult.Error -> {
                 _state.update { it.copy(isSubmitting = false) }
