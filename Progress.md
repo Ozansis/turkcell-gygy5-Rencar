@@ -714,3 +714,79 @@
   runtime testi (License→Selfie→Confirmation akışının önceki davranışla birebir aynı
   çalıştığı, geri/ileri navigasyonda aynı `LicenseFlowViewModel` örneğinin korunduğu)
   bu batch'te YAPILAMADI.
+
+### 2026-07-16 — Ehliyet görsel seçici altyapısı: Coil + FileProvider (Batch 1, 4 dosya)
+- **Ne yapıldı:** LicenseScreen'i gerçek kamera/galeri seçiciye bağlamanın ön koşulu
+  olan altyapı kuruldu: Coil 3 (`coil-compose`) bağımlılığı eklendi (projenin ilk
+  görsel önizleme kütüphanesi) ve kamera çekimi için `androidx.core.content.FileProvider`
+  tanımlandı (`AndroidManifest.xml`'e `<provider>` + `res/xml/file_paths.xml`'e
+  `cache-path`). İlk denemede Coil 3.5.0 seçilmişti ama bu sürüm Kotlin 2.4.0 ile
+  derlenmiş `kotlin-stdlib`'i transitive olarak çekiyor; projenin Kotlin derleyicisi
+  (2.2.10) bu metadata sürümünü okuyamadığından `compileDebugKotlin` "incompatible
+  metadata version" hatasıyla çöktü. Coil'in resmi değişiklik geçmişi kontrol edilerek
+  Kotlin 2.2.0 ile derlenmiş Coil 3.3.0'a düşürüldü, derleme sorunsuz geçti.
+- **Değişen dosyalar:** `gradle/libs.versions.toml` (coil versiyonu + `coil-compose`
+  kütüphane girdisi), `app/build.gradle.kts` (`implementation(libs.coil.compose)`),
+  `app/src/main/AndroidManifest.xml` (`FileProvider` provider tanımı,
+  `${applicationId}.fileprovider` authority). **Yeni dosya:** `app/src/main/res/xml/file_paths.xml`
+  (`cache-path name="license_images" path="license_images/"`).
+- **Neden bu şekilde yapıldı:** FileProvider'ın kamera fotoğraflarını `cacheDir/license_images/`
+  altına yazması tercih edildi (kalıcı depolama gerekmiyor, `Selfie`/upload batch'i
+  bu dosyaları yükledikten sonra ihtiyaç kalmıyor). Coil'in `coil3.compose.AsyncImage`
+  API'si (paket adı Coil 2'den farklı olarak `coil3` oldu) yerel `content://`/`file://`
+  Uri'lerini ek bir network modülüne (`coil-network-*`) gerek kalmadan çözebildiğinden
+  bu batch'te sadece `coil-compose` eklendi. Kamera için `CAMERA` izni eklenmedi:
+  `ActivityResultContracts.TakePicture()` örtük intent ile sistem kamera uygulamasını
+  açıyor, izni o uygulama kendi yönetiyor. Galeri için de `READ_EXTERNAL_STORAGE`
+  eklenmedi: `PickVisualMedia` sistem foto seçici olduğundan scoped-storage'a tabi değil.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ve ardından tam
+  `./gradlew :app:assembleDebug` ile derlendi, ikisi de BUILD SUCCESSFUL. Birleştirilmiş
+  manifest dosyası (`app/build/intermediates/merged_manifest/debug/.../AndroidManifest.xml`)
+  okunarak `<provider>` girdisinin `authorities="com.turkcell.rencar_pair.fileprovider"`
+  olarak doğru birleştiği doğrulandı. Runtime/UI testi (gerçek kamera/galeri açma) bu
+  batch'te kapsam dışı — henüz hiçbir Route bu altyapıyı çağırmıyor (Batch 2'nin işi).
+
+### 2026-07-16 — LicenseScreen gerçek kamera/galeri seçiciye bağlandı (Batch 2, 5 dosya)
+- **Ne yapıldı:** `LicenseContract.State`'teki `isFrontUploaded`/`isBackUploaded` artık
+  ayrı boolean alanlar değil, `frontUri`/`backUri: Uri?` alanlarından türetilen computed
+  property (varsayılan `true` hatası bu şekilde kökten düzeldi — `Uri` varsayılan `null`
+  olduğundan `isFrontUploaded` varsayılan `false`). Yeni `isContinueEnabled` computed
+  property eklendi (ikisi de dolu değilse `false`); "Devam Et" butonu artık buna göre
+  `enabled` oluyor ve `handleContinue()`'a guard clause eklendi. Yeni Intent'ler
+  (`PickFrontImage`/`PickBackImage` → dialog tetikler, `FrontImageSelected`/
+  `BackImageSelected(uri)` → seçim sonucu State'e yazar) ve Effect'ler
+  (`ShowFrontImageSourceDialog`/`ShowBackImageSourceDialog`) eklendi. `LicenseScreen`'de
+  önceden salt-okunur olan ön yüz satırı, arka yüzle aynı tıklanabilir dropzone'a
+  çevrildi; ikisi de dolu olduğunda Coil `AsyncImage` ile gerçek küçük resim önizlemesi
+  gösteriyor (üstte "Yüklendi" rozeti overlay). `LicenseRoute`, artık zorunlu
+  `licenseFlowViewModel: LicenseFlowViewModel` parametresi alıyor;
+  `ActivityResultContracts.TakePicture`/`PickVisualMedia` launcher'ları, basit bir
+  `AlertDialog` ("Kameradan Çek" / "Galeriden Seç") ve seçilen `Uri`'yi hem
+  `licenseFlowViewModel.setFrontUri()/setBackUri()`'ye (Selfie batch'inin de okuyacağı
+  paylaşılan state) hem `viewModel.onIntent(...ImageSelected(uri))`'ye (bu ekranın kendi
+  önizleme state'i) yazan köprü mantığı eklendi. `RenCarNavHost.kt`'de daha önce alınıp
+  hiç geçilmeyen `licenseFlowViewModel` artık `LicenseRoute(...)`'a parametre olarak
+  veriliyor.
+- **Değişen dosyalar:** `feature/auth/license/LicenseContract.kt`,
+  `feature/auth/license/LicenseViewModel.kt`, `feature/auth/license/LicenseScreen.kt`,
+  `feature/auth/license/LicenseRoute.kt`, `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** Kamera/galeri seçimi platform (Activity) düzeyinde bir
+  kaygı olduğundan (`registerForActivityResult`, `FileProvider`) bu mantık ViewModel'e
+  değil Route'a kondu — ViewModel yalnızca "hangi taraf için dialog gösterilsin" kararını
+  Effect ile iletiyor, dialogdan sonra gerçek launcher çağrısı Route'ta kalıyor; bu,
+  mvi-overview.md'nin Route'a verdiği "ViewModel ile köprü" rolüyle tutarlı. Seçilen
+  `Uri` bilinçli olarak İKİ yere birden yazılıyor: `LicenseFlowViewModel` (üç ekran
+  arasında paylaşılan, upload'da kullanılacak kalıcı kaynak — önceki batch'te kurulan
+  mimari karar) ve `LicenseContract.State` (bu ekranın kendi Coil önizlemesi için) —
+  tekrar gibi görünse de ikisinin sorumluluğu farklı ve `LicenseViewModel`'in
+  `LicenseFlowViewModel`'e bağımlı olması (farklı ViewModelStore scope'ları nedeniyle)
+  teknik olarak pratik değildi. Kullanıcıyla netleştirilen karar gereği "Devam Et"
+  butonunun ön/arka yüz olmadan aktif kalması bu batch'te kapatıldı; selfie'nin kendi
+  butonu Selfie batch'inin kapsamında kalacak. `AlertDialog`'da "Galeriden Seç"
+  `dismissButton` slotuna kondu (iptal değil, ikinci gerçek seçenek) — ayrı bir custom
+  dialog yazmak bu ölçekte gereksiz olurdu.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ve tam `./gradlew :app:assembleDebug`
+  ile derlendi, ikisi de BUILD SUCCESSFUL, yeni uyarı yok. Emülatör/cihazda runtime/UI
+  testi (kamera açma, galeri seçme, önizlemenin gerçekten göründüğü, "Devam Et"in
+  disabled/enabled geçişi) bu oturumda YAPILAMADI — sadece derleme ve manifest birleştirme
+  doğrulandı.

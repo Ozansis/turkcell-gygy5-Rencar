@@ -1,9 +1,9 @@
 package com.turkcell.rencar_pair.feature.auth.license
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,11 +34,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.turkcell.rencar_pair.ui.components.StepIndicator
 
 @Composable
@@ -83,9 +85,19 @@ fun LicenseScreen(
 
             Spacer(Modifier.height(28.dp))
 
-            UploadStatusRow(
-                label      = "Ehliyet ön yüz",
-                isUploaded = state.isFrontUploaded
+            Text(
+                text       = "Ehliyet ön yüz",
+                style      = MaterialTheme.typography.labelLarge,
+                color      = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            UploadDropzone(
+                label    = "Ön yüzü çek veya yükle",
+                imageUri = state.frontUri,
+                onClick  = { onIntent(LicenseContract.Intent.PickFrontImage) }
             )
 
             Spacer(Modifier.height(24.dp))
@@ -100,8 +112,9 @@ fun LicenseScreen(
             Spacer(Modifier.height(12.dp))
 
             UploadDropzone(
-                isUploaded = state.isBackUploaded,
-                onClick    = { onIntent(LicenseContract.Intent.UploadBackSide) }
+                label    = "Arka yüzü çek veya yükle",
+                imageUri = state.backUri,
+                onClick  = { onIntent(LicenseContract.Intent.PickBackImage) }
             )
 
             Spacer(Modifier.height(20.dp))
@@ -112,6 +125,7 @@ fun LicenseScreen(
 
             Button(
                 onClick   = { onIntent(LicenseContract.Intent.Continue) },
+                enabled   = state.isContinueEnabled,
                 modifier  = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -156,29 +170,6 @@ private fun BackButton(onClick: () -> Unit) {
 }
 
 @Composable
-private fun UploadStatusRow(
-    label: String,
-    isUploaded: Boolean
-) {
-    Row(
-        modifier              = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment     = Alignment.CenterVertically
-    ) {
-        Text(
-            text       = label,
-            style      = MaterialTheme.typography.labelLarge,
-            color      = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        if (isUploaded) {
-            UploadedBadge()
-        }
-    }
-}
-
-@Composable
 private fun UploadedBadge() {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -205,20 +196,33 @@ private fun UploadedBadge() {
 
 @Composable
 private fun UploadDropzone(
-    isUploaded: Boolean,
+    label: String,
+    imageUri: Uri?,
     onClick: () -> Unit
 ) {
-    if (isUploaded) {
+    if (imageUri != null) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(120.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center
+                .clickable(onClick = onClick)
         ) {
-            UploadedBadge()
+            AsyncImage(
+                model              = imageUri,
+                contentDescription = label,
+                modifier           = Modifier.fillMaxSize(),
+                contentScale       = ContentScale.Crop
+            )
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+            ) {
+                UploadedBadge()
+            }
         }
         return
     }
@@ -257,7 +261,7 @@ private fun UploadDropzone(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text  = "Arka yüzü çek veya yükle",
+                text  = label,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
