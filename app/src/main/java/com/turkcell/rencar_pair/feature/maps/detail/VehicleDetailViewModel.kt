@@ -97,12 +97,13 @@ class VehicleDetailViewModel @AssistedInject constructor(
     }
 
     private fun handleReserveClicked() {
-        if (!_state.value.canReserve) return
+        if (!_state.value.isUnlocked) return
         sendEffect(VehicleDetailContract.Effect.ShowReservationConfirmed)
     }
 
     private fun handleUnlockClicked() {
         if (!_state.value.canUnlock) return
+        _state.update { it.copy(isUnlocked = true) }
         sendEffect(VehicleDetailContract.Effect.ShowUnlockConfirmed)
     }
 

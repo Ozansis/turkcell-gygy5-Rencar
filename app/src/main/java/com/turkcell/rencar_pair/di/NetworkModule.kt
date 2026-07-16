@@ -5,6 +5,8 @@ import android.content.pm.ApplicationInfo
 import com.turkcell.rencar_pair.data.network.AuthApiService
 import com.turkcell.rencar_pair.data.network.AuthInterceptor
 import com.turkcell.rencar_pair.data.network.LicenseApiService
+import com.turkcell.rencar_pair.data.network.RentalsApiService
+import com.turkcell.rencar_pair.data.network.ReservationsApiService
 import com.turkcell.rencar_pair.data.network.VehiclesApiService
 import dagger.Module
 import dagger.Provides
@@ -74,5 +76,17 @@ object NetworkModule {
     @Singleton
     fun provideLicenseApiService(retrofit: Retrofit): LicenseApiService {
         return retrofit.create(LicenseApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideReservationsApiService(retrofit: Retrofit): ReservationsApiService {
+        return retrofit.create(ReservationsApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideRentalsApiService(retrofit: Retrofit): RentalsApiService {
+        return retrofit.create(RentalsApiService::class.java)
     }
 }

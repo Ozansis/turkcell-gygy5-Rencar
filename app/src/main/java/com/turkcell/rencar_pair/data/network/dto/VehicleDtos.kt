@@ -20,3 +20,13 @@ data class VehicleResponseDto(
     val createdAt: String,
     val updatedAt: String
 )
+
+data class QuoteResponseDto(
+    val vehicleId: String,
+    val plan: String,
+    val minutes: Double,
+    val usageFee: Double,
+    val startFee: Double,
+    val serviceFee: Double,
+    val estimatedTotal: Double
+)

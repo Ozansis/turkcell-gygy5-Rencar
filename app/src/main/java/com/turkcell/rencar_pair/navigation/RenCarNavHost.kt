@@ -18,6 +18,8 @@ import com.turkcell.rencar_pair.feature.auth.register.RegisterRoute
 import com.turkcell.rencar_pair.feature.auth.selfie.SelfieRoute
 import com.turkcell.rencar_pair.feature.maps.detail.VehicleDetailRoute
 import com.turkcell.rencar_pair.feature.onboarding.OnboardingRoute
+import com.turkcell.rencar_pair.feature.rental.active.ActiveRentalRoute
+import com.turkcell.rencar_pair.feature.rental.reservation.ReservationConfirmationRoute
 import com.turkcell.rencar_pair.feature.splash.SplashRoute
 
 private object RenCarDestinations {
@@ -32,9 +34,13 @@ private object RenCarDestinations {
     const val CONFIRMATION = "confirmation"
     const val HOME = "home"
     const val VEHICLE_DETAIL = "vehicle-detail/{vehicleId}/{distanceMeters}"
+    const val RESERVATION_CONFIRMATION = "reservation-confirmation/{vehicleId}"
+    const val RENTAL_ACTIVE = "rental-active/{rentalId}"
 
     fun otpRoute(phoneNumber: String) = "otp/$phoneNumber"
     fun vehicleDetailRoute(vehicleId: String, distanceMeters: Int) = "vehicle-detail/$vehicleId/$distanceMeters"
+    fun reservationConfirmationRoute(vehicleId: String) = "reservation-confirmation/$vehicleId"
+    fun rentalActiveRoute(rentalId: String) = "rental-active/$rentalId"
 }
 
 @Composable
@@ -182,7 +188,41 @@ fun RenCarNavHost() {
             VehicleDetailRoute(
                 vehicleId      = vehicleId,
                 distanceMeters = distanceMeters,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToReservationConfirmation = { id ->
+                    navController.navigate(RenCarDestinations.reservationConfirmationRoute(id))
+                }
+            )
+        }
+
+        composable(
+            route     = RenCarDestinations.RESERVATION_CONFIRMATION,
+            arguments = listOf(navArgument("vehicleId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val vehicleId = backStackEntry.arguments?.getString("vehicleId").orEmpty()
+            ReservationConfirmationRoute(
+                vehicleId      = vehicleId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToActiveRental = { rentalId ->
+                    navController.navigate(RenCarDestinations.rentalActiveRoute(rentalId)) {
+                        popUpTo(RenCarDestinations.HOME)
+                    }
+                }
+            )
+        }
+
+        composable(
+            route     = RenCarDestinations.RENTAL_ACTIVE,
+            arguments = listOf(navArgument("rentalId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val rentalId = backStackEntry.arguments?.getString("rentalId").orEmpty()
+            ActiveRentalRoute(
+                rentalId = rentalId,
+                onNavigateToHome = {
+                    navController.navigate(RenCarDestinations.HOME) {
+                        popUpTo(RenCarDestinations.HOME) { inclusive = true }
+                    }
+                }
             )
         }
     }
