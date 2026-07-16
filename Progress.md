@@ -852,3 +852,202 @@
   önizlemesinin göründüğü, "Devam Et"in loading/disabled geçişi, gerçek
   upload'ın Confirmation'a yönlendirdiği, hata Toast'ının göründüğü) bu
   oturumda YAPILAMADI — sadece derleme doğrulandı.
+
+
+### 2026-07-16 — Rezervasyon Onayı + Aktif Kiralama akışı: Reservations network/repository katmanı (Batch 1, 4 dosya)
+- **Ne yapıldı:** Araç Detay ekranındaki "Kilidi Aç" → Rezervasyon Onayı →
+  Aktif Kiralama zincirinin ilk adımı olarak `POST /reservations` için
+  Retrofit sözleşmesi kuruldu — DTO'lar, `ReservationsApiService`,
+  `ReservationsRepository`. Alanlar `docs/api/openapi.json`'daki
+  `CreateReservationDto`/`ReservationVehicleSummaryDto`/`ReservationResponseDto`
+  şemalarıyla birebir.
+- **Değişen dosyalar:** `data/network/dto/ReservationDtos.kt` (yeni),
+  `data/network/ReservationsApiService.kt` (yeni),
+  `data/repository/ReservationsRepository.kt` (yeni), `di/NetworkModule.kt`
+  (`provideReservationsApiService` eklendi).
+- **Neden bu şekilde yapıldı:** `ReservationsRepository`, `VehiclesRepository.kt`'deki
+  inline `try/catch IOException` + `AuthResult<T>` deseni birebir izlenerek
+  yazıldı (projede repository'ler arası ortak bir `safeCall` soyutlaması yok,
+  `AuthRepository.kt`'deki `safeCall` yalnızca kendi içinde private — bu yüzden
+  yeni repository'ler de aynı inline deseni tekrar ediyor, mevcut konvansiyona
+  uyum için). Bu, kullanıcıyla onaylanan 6 batch'lik plandan (bkz. plan dosyası
+  `agent-md-docs-api-openapi-json-bu-ekran-starry-finch.md`) Batch 1'dir; Rentals
+  katmanı, Quote endpoint'i ve ekranlar ayrı batch'lerde gelecek.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` BUILD SUCCESSFUL.
+  Bu katman henüz hiçbir ekrandan çağrılmadığı için runtime/UI testi bu
+  batch'te YAPILAMADI (henüz bir tüketicisi yok).
+
+
+### 2026-07-16 — Rezervasyon Onayı + Aktif Kiralama akışı: Rentals network/repository katmanı (Batch 2, 4 dosya)
+- **Ne yapıldı:** `POST /rentals`, `GET /rentals/active`, `POST /rentals/{id}/finish`
+  için Retrofit sözleşmesi kuruldu — DTO'lar, `RentalsApiService`,
+  `RentalsRepository`. `docs/api/openapi.json`'daki `FinishRentalResponseDto`
+  şeması `RentalResponseDto` ile alan alan birebir aynı olduğu için ayrı bir
+  DTO sınıfı açılmadı, `finishRental()` da `RentalResponseDto` döndürüyor.
+- **Değişen dosyalar:** `data/network/dto/RentalDtos.kt` (yeni —
+  `CreateRentalDto`, `RentalVehicleSummaryDto`, `RentalResponseDto`,
+  `ActiveRentalResponseDto`), `data/network/RentalsApiService.kt` (yeni),
+  `data/repository/RentalsRepository.kt` (yeni), `di/NetworkModule.kt`
+  (`provideRentalsApiService` eklendi).
+- **Neden bu şekilde yapıldı:** Yine `VehiclesRepository.kt`'deki inline
+  `try/catch IOException` + `AuthResult<T>` deseni izlendi (bkz. Batch 1
+  gerekçesi). Deprecated `startDate` alanı (backend'in "KULLANMAYIN, eski
+  istemci uyumluluğu için tutuluyor" dediği alan) DTO'lara bilinçli olarak
+  eklenmedi — Gson yanıttaki fazladan JSON alanlarını sessizce yok sayar, bu
+  yüzden eksik bırakmak güvenli ve gereksiz alan eklemeden kaçınıyor. Bu,
+  onaylanan 6 batch'lik planın (`agent-md-docs-api-openapi-json-bu-ekran-starry-finch.md`)
+  Batch 2'sidir.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` BUILD SUCCESSFUL.
+  Bu katman de henüz hiçbir ekrandan çağrılmıyor, runtime testi bu batch'te
+  YAPILAMADI.
+
+
+### 2026-07-16 — Rezervasyon Onayı + Aktif Kiralama akışı: Vehicles katmanına quote endpoint'i eklendi (Batch 3, 3 dosya)
+- **Ne yapıldı:** `GET /vehicles/{id}/quote` (fiyat önizleme) mevcut
+  `VehiclesApiService`/`VehiclesRepository`'ye eklendi. `QuoteResponseDto`
+  (`vehicleId, plan, minutes, usageFee, startFee, serviceFee, estimatedTotal`)
+  `openapi.json`'daki şemayla birebir.
+- **Değişen dosyalar:** `data/network/dto/VehicleDtos.kt` (`QuoteResponseDto`
+  eklendi), `data/network/VehiclesApiService.kt` (`getQuote` eklendi),
+  `data/repository/VehiclesRepository.kt` (`getQuote(id, plan, minutes)`
+  eklendi).
+- **Neden bu şekilde yapıldı:** Quote, ayrı bir "Quotes" kaynağı değil,
+  backend'de zaten `/vehicles/{id}/quote` altında yaşıyor; bu yüzden yeni bir
+  `QuoteApiService`/`QuoteRepository` açmak yerine mevcut Vehicles
+  katmanına eklendi — bu, ilgili tek endpoint için gereksiz bir dosya çifti
+  açmaktan kaçınıyor. Onaylanan planın (`agent-md-docs-api-openapi-json-bu-ekran-starry-finch.md`)
+  Batch 3'üdür.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` BUILD SUCCESSFUL.
+  Henüz bir tüketicisi olmadığı için runtime testi YAPILAMADI.
+
+
+### 2026-07-16 — Rezervasyon Onayı ekranı (MVI, Batch 4, 4 dosya)
+- **Ne yapıldı:** Verilen tasarıma (araç özeti + Yakıt% rozeti, Dakikalık/
+  Saatlik/Günlük plan seçici, ücret dökümü, şartlar checkbox'ı, alt sabit
+  "Rezervasyonu Tamamla" butonu) birebir yeni `feature/rental/reservation/`
+  paketi eklendi. `ReservationConfirmationViewModel`, açılışta aracı
+  (`vehiclesRepository.getVehicle`) ve ilk quote'u (`getQuote(..., PER_MINUTE,
+  30)`) yüklüyor; plan değişince quote'u tekrar çekiyor. "Rezervasyonu
+  Tamamla" → `reservationsRepository.createReservation` başarılıysa, seçili
+  plan DAILY ise otomatik `rentalsRepository.createRental(..., endDate = şu
+  an + 1 gün)` çağırıp `NavigateToActiveRental` efektini gönderiyor; DAILY
+  değilse (Dakikalık/Saatlik — foto akışı bu görevin kapsamı dışında)
+  `NavigateBackWithMessage` ile bilgilendirip geri dönüyor.
+- **Değişen dosyalar:** `feature/rental/reservation/ReservationConfirmationContract.kt`,
+  `ReservationConfirmationViewModel.kt`, `ReservationConfirmationRoute.kt`,
+  `ReservationConfirmationScreen.kt` (hepsi yeni).
+- **Neden bu şekilde yapıldı:** `ViewModel`, `VehicleDetailViewModel.kt`'deki
+  `@AssistedInject`/`@AssistedFactory` (vehicleId parametreli) deseniyle
+  birebir kuruldu — `docs/decisions.md`'deki güncel param-taking ViewModel
+  stratejisiyle uyumlu. Bu ekran, License/Selfie akışındaki gibi nav-graph-
+  scoped paylaşılan bir ViewModel KULLANMIYOR — çünkü ekranlar arasında
+  adım adım biriken ortak mutable state yok, her ekran kendi `vehicleId`/
+  `rentalId` nav-arg'ından bağımsız veri çekiyor (`docs/decisions.md`'deki
+  "Nav-Graph-Scoped Paylaşılan ViewModel" kuralı yalnızca çok adımlı, veri
+  biriktiren akışlar için geçerli). Bu, kullanıcıyla netleştirilen kapsam
+  kararlarına göre onaylanan 6 batch'lik planın Batch 4'üdür; DAILY dışı
+  planlarda gerçek kiralama açma ve 4-yön foto akışı bilinçli olarak bu
+  batch'e alınmadı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` BUILD SUCCESSFUL —
+  ilk denemede `ReservationConfirmationScreen.kt`'de yanlışlıkla eklenen
+  `import androidx.compose.foundation.layout.weight` satırı derleme hatasına
+  yol açtı (`weight`, Compose'da `RowScope`/`ColumnScope`'un gerçek üye
+  fonksiyonu olduğu için ayrı import gerektirmiyor, yanlış import internal
+  bir sembole çarpıyordu); import kaldırılınca derleme geçti. Bu ekran henüz
+  navigasyona bağlanmadığı (Batch 6'da bağlanacak) için emülatörde açılış/
+  akış testi bu batch'te YAPILAMADI.
+
+
+### 2026-07-16 — Aktif Kiralama ekranı (MVI, Batch 5, 4 dosya)
+- **Ne yapıldı:** Verilen 3. tasarıma (üstte yeşil noktalı "Kiralama aktif ·
+  {marka} {model}" pili, harita, alt sheet'te "Geçen süre" büyük saat +
+  "Anlık ücret"/"Mesafe" kartları + "Kilitle / Aç"/"Kiralamayı Bitir"
+  butonları) birebir yeni `feature/rental/active/` paketi eklendi.
+  `ActiveRentalViewModel`, `GET /rentals/active`'i 5 saniyede bir polling
+  yapıyor (`mvi-viewmodel-rules.md`'deki `Job?` timer deseni, `onCleared()`'da
+  iptal ediliyor), 404 gelirse (kiralama bitmiş) polling'i sessizce durduruyor.
+  "Kiralamayı Bitir" → `POST /rentals/{id}/finish`, başarılıysa `NavigateToHome`
+  efekti; "Kilitle / Aç" → kullanıcıyla netleşen kararla şimdilik yalnızca
+  "Bu özellik yakında eklenecek." bilgi Toast'ı (placeholder).
+- **Değişen dosyalar:** `feature/rental/active/ActiveRentalContract.kt`,
+  `ActiveRentalViewModel.kt`, `ActiveRentalRoute.kt`, `ActiveRentalScreen.kt`
+  (hepsi yeni).
+- **Neden bu şekilde yapıldı:** Plandaki ilk varsayımın aksine,
+  `ActiveRentalResponseDto`/`RentalVehicleSummaryDto` şemasında araç
+  konumu (latitude/longitude) YOK — bu, `openapi.json`'da doğrulandı,
+  uydurulmadı. Bunun yerine `VehicleDetailViewModel.kt`'deki mevcut desen
+  aynen tekrarlandı: ilk konum `vehiclesRepository.getVehicle(vehicleId)`
+  ile tek seferlik çekiliyor, sonrası `VehicleLocationSocketClient`
+  (proje genelinde zaten kullanılan canlı konum soketi) ile güncelleniyor.
+  Aynı `getVehicle` çağrısından `pricePerDay` de alınıp haritadaki marker
+  etiketine (`RencarMap`'in `updateVehicles()`'ı `NearbyVehicle.pricePerDay`'i
+  okuyor) yansıtıldı — aksi halde marker "₺0" gösterirdi. Haritadaki noktalı
+  "rota/iz" çizgisi, backend'de bir konum geçmişi endpoint'i olmadığı için
+  BİLİNÇLİ OLARAK eklenmedi (kullanıcıya plan aşamasında bildirilen sınırlama).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` BUILD SUCCESSFUL.
+  Bu ekran henüz navigasyona bağlanmadığı (Batch 6'da bağlanacak) için
+  emülatörde polling/finish akışı testi bu batch'te YAPILAMADI.
+
+
+### 2026-07-16 — Rezervasyon Onayı + Aktif Kiralama akışı: Navigasyon + Araç Detay entegrasyonu (Batch 6, 3 dosya)
+- **Ne yapıldı:** `RenCarNavHost.kt`'ye `reservation-confirmation/{vehicleId}`
+  ve `rental-active/{rentalId}` route'ları eklendi. Araç Detay ekranındaki
+  "Kilidi Aç" butonu artık gerçek bir yere gidiyor: `VehicleDetailRoute.kt`'de
+  `Effect.ShowUnlockConfirmed -> onNavigateToReservationConfirmation(vehicleId)`
+  olarak bağlandı (Contract/ViewModel'e dokunulmadı — mevcut `canUnlock`
+  mesafe/durum koşulu aynen korunuyor). Rezervasyon Onayı → Aktif Kiralama
+  geçişinde `popUpTo(HOME)` ile Araç Detay + Rezervasyon Onayı ekranları
+  yığından temizleniyor (geri tuşu doğrudan Ana ekrana dönüyor). "Kiralamayı
+  Bitir" sonrası `NavigateToHome` efekti de `popUpTo(HOME){inclusive=true}`
+  ile yığını sıfırlayıp Ana ekrana dönüyor. `VehicleDetailScreen.kt`'de
+  "Rezerve Et" butonu artık koşulsuz `enabled = false` — bu görevde her zaman
+  pasif.
+- **Değişen dosyalar:** `navigation/RenCarNavHost.kt`,
+  `feature/maps/detail/VehicleDetailRoute.kt`,
+  `feature/maps/detail/VehicleDetailScreen.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcıyla netleşen karara göre "Rezerve Et"
+  bu görevde tamamen devre dışı bırakıldı (ayrı bir görevde ele alınacak);
+  Contract/ViewModel değiştirilmedi çünkü `canReserve` computed alanı başka
+  yerde (`StatusBadge`) hâlâ kullanılıyor, sadece buton görünümü sabitlendi.
+  Reservation/Rental ekranları arasında License/Selfie'deki gibi nav-graph-
+  scoped paylaşılan bir ViewModel KURULMADI çünkü her ekran kendi
+  `vehicleId`/`rentalId` nav-arg'ından bağımsız veri çekiyor — aralarında
+  adım adım biriktirilen ortak state yok (bkz. Batch 4 gerekçesi).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` BUILD SUCCESSFUL.
+  Bu, onaylanan 6 batch'lik planın son batch'idir; tüm zincir artık
+  navigasyona bağlı. Emülatörde uçtan uca happy-path testi (Harita → Araç
+  Detay → Kilidi Aç → Rezervasyon Onayı → Günlük plan → Rezervasyonu Tamamla
+  → Aktif Kiralama → Kiralamayı Bitir → Ana ekran) bu oturumda henüz
+  YAPILMADI — ayrıca doğrulanacak.
+
+
+### 2026-07-16 — Kilidi Aç/Rezerve Et etkileşim akışı emülatör testi sonrası revize edildi (2 dosya)
+- **Ne yapıldı:** Emülatörde gerçek backend'e karşı test edilirken kullanıcı
+  akışı netleştirdi: "Kilidi Aç" artık bir sayfaya GEÇMİYOR — sadece aracı
+  yerel olarak "açık" (`isUnlocked`) durumuna getirip bir onay Toast'ı
+  gösteriyor. Bu durumda "Rezerve Et" butonu aktifleşiyor; Rezervasyon
+  Onayı ekranına geçiş artık "Rezerve Et"e basınca oluyor. Ayrıca kullanıcı
+  isteğiyle "Kilidi Aç"ın 100m mesafe şartı tamamen kaldırıldı — buton artık
+  yalnızca araç MÜSAİT olduğunda aktif (mesafeden bağımsız).
+- **Değişen dosyalar:** `feature/maps/detail/VehicleDetailContract.kt`
+  (`State.isUnlocked` eklendi, `canUnlock` mesafe şartı kaldırıldı,
+  `UNLOCK_MAX_DISTANCE_METERS` kullanılmadığı için silindi),
+  `feature/maps/detail/VehicleDetailViewModel.kt` (`handleUnlockClicked`
+  artık `isUnlocked=true` set ediyor; `handleReserveClicked` artık
+  `canReserve` yerine `isUnlocked`'a bakıyor), `feature/maps/detail/VehicleDetailRoute.kt`
+  (`ShowReservationConfirmed` efekti Rezervasyon Onayı'na navigate ediyor,
+  `ShowUnlockConfirmed` artık sadece bilgi Toast'ı gösteriyor — bir önceki
+  batch'teki kablolama tam tersine çevrildi), `feature/maps/detail/VehicleDetailScreen.kt`
+  ("Rezerve Et" butonu artık `enabled = state.isUnlocked`, sabit `false`
+  değil).
+- **Neden bu şekilde yapıldı:** Kullanıcı, gerçek cihazda test ederken
+  orijinal kararın (Kilidi Aç → doğrudan Rezervasyon Onayı, Rezerve Et hep
+  pasif) istediği ürün akışıyla uyuşmadığını fark etti ve düzeltti. Mesafe
+  şartının kaldırılması da kullanıcının açık talebi — artık "Kilidi Aç"
+  gerçek bir donanım kilidi açmıyor (backend'de böyle bir endpoint yok,
+  tamamen yerel/simüle bir durum), bu yüzden fiziksel yakınlık şartının bir
+  güvenlik anlamı kalmadı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ve
+  `./gradlew :app:installDebug` ile derlenip emülatöre kuruldu, BUILD
+  SUCCESSFUL. Kullanıcı emülatörde canlı backend'e karşı akışı bizzat test
+  etti (giriş, harita, araç listesi, Kilidi Aç/Rezerve Et etkileşimi).

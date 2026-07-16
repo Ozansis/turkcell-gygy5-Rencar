@@ -199,7 +199,7 @@ private fun VehicleDetailSheet(
                     modifier = Modifier
                         .weight(1f)
                         .height(52.dp),
-                    enabled = state.canReserve,
+                    enabled = state.isUnlocked,
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Text("Rezerve Et")

@@ -6,8 +6,6 @@ import com.turkcell.rencar_pair.feature.maps.VehicleType
 
 object VehicleDetailContract {
 
-    const val UNLOCK_MAX_DISTANCE_METERS = 100
-
     data class State(
         val vehicleId: String = "",
         val brand: String = "",
@@ -26,10 +24,11 @@ object VehicleDetailContract {
         val pricePerDay: Double = 0.0,
         val vehicleLocation: GeoPoint? = null,
         val myLocation: GeoPoint? = null,
-        val isLoading: Boolean = false
+        val isLoading: Boolean = false,
+        val isUnlocked: Boolean = false
     ) {
         val canReserve: Boolean get() = status == VehicleStatus.AVAILABLE
-        val canUnlock: Boolean get() = status == VehicleStatus.AVAILABLE && distanceMeters <= UNLOCK_MAX_DISTANCE_METERS
+        val canUnlock: Boolean get() = status == VehicleStatus.AVAILABLE
         val statusLabel: String get() = if (status == VehicleStatus.AVAILABLE) "MÜSAİT" else "MÜSAİT DEĞİL"
         val distanceLabel: String get() = "$distanceMeters m uzaklıkta"
         val formattedPricePerMinute: String get() = "₺${"%.2f".format(pricePerMinute).replace('.', ',')}/dk"

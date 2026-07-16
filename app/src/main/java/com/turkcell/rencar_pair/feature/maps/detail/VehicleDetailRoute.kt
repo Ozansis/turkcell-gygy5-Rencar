@@ -20,6 +20,7 @@ fun VehicleDetailRoute(
     vehicleId: String,
     distanceMeters: Int,
     onNavigateBack: () -> Unit = {},
+    onNavigateToReservationConfirmation: (String) -> Unit = {},
     viewModel: VehicleDetailViewModel = hiltViewModel<VehicleDetailViewModel, VehicleDetailViewModel.Factory>(
         creationCallback = { factory -> factory.create(vehicleId, distanceMeters) }
     )
@@ -44,8 +45,9 @@ fun VehicleDetailRoute(
         viewModel.effect.collect { effect ->
             when (effect) {
                 VehicleDetailContract.Effect.NavigateBack             -> onNavigateBack()
-                VehicleDetailContract.Effect.ShowReservationConfirmed -> Unit
-                VehicleDetailContract.Effect.ShowUnlockConfirmed      -> Unit
+                VehicleDetailContract.Effect.ShowReservationConfirmed -> onNavigateToReservationConfirmation(vehicleId)
+                VehicleDetailContract.Effect.ShowUnlockConfirmed      ->
+                    Toast.makeText(context, "Kilit açıldı, rezervasyonu tamamlayabilirsiniz.", Toast.LENGTH_SHORT).show()
                 is VehicleDetailContract.Effect.ShowError             -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
             }
         }
