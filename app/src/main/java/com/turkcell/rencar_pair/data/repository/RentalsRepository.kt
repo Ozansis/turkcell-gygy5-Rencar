@@ -1,20 +1,21 @@
 package com.turkcell.rencar_pair.data.repository
 
-import com.turkcell.rencar_pair.data.network.VehiclesApiService
-import com.turkcell.rencar_pair.data.network.dto.QuoteResponseDto
-import com.turkcell.rencar_pair.data.network.dto.VehicleResponseDto
+import com.turkcell.rencar_pair.data.network.RentalsApiService
+import com.turkcell.rencar_pair.data.network.dto.ActiveRentalResponseDto
+import com.turkcell.rencar_pair.data.network.dto.CreateRentalDto
+import com.turkcell.rencar_pair.data.network.dto.RentalResponseDto
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class VehiclesRepository @Inject constructor(
-    private val vehiclesApiService: VehiclesApiService
+class RentalsRepository @Inject constructor(
+    private val rentalsApiService: RentalsApiService
 ) {
 
-    suspend fun listVehicles(includeBusy: Boolean = true): AuthResult<List<VehicleResponseDto>> {
+    suspend fun createRental(vehicleId: String, plan: String, endDate: String? = null): AuthResult<RentalResponseDto> {
         return try {
-            val response = vehiclesApiService.listVehicles(includeBusy = includeBusy.toString())
+            val response = rentalsApiService.createRental(CreateRentalDto(vehicleId, plan, endDate))
             val body = response.body()
             if (response.isSuccessful && body != null) {
                 AuthResult.Success(body)
@@ -26,9 +27,9 @@ class VehiclesRepository @Inject constructor(
         }
     }
 
-    suspend fun getVehicle(id: String): AuthResult<VehicleResponseDto> {
+    suspend fun getActiveRental(): AuthResult<ActiveRentalResponseDto> {
         return try {
-            val response = vehiclesApiService.getVehicle(id)
+            val response = rentalsApiService.getActiveRental()
             val body = response.body()
             if (response.isSuccessful && body != null) {
                 AuthResult.Success(body)
@@ -40,9 +41,9 @@ class VehiclesRepository @Inject constructor(
         }
     }
 
-    suspend fun getQuote(id: String, plan: String, minutes: Int): AuthResult<QuoteResponseDto> {
+    suspend fun finishRental(id: String): AuthResult<RentalResponseDto> {
         return try {
-            val response = vehiclesApiService.getQuote(id, plan, minutes)
+            val response = rentalsApiService.finishRental(id)
             val body = response.body()
             if (response.isSuccessful && body != null) {
                 AuthResult.Success(body)

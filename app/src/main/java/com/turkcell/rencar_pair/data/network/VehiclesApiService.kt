@@ -1,5 +1,6 @@
 package com.turkcell.rencar_pair.data.network
 
+import com.turkcell.rencar_pair.data.network.dto.QuoteResponseDto
 import com.turkcell.rencar_pair.data.network.dto.VehicleResponseDto
 import retrofit2.Response
 import retrofit2.http.GET
@@ -19,4 +20,11 @@ interface VehiclesApiService {
 
     @GET("vehicles/{id}")
     suspend fun getVehicle(@Path("id") id: String): Response<VehicleResponseDto>
+
+    @GET("vehicles/{id}/quote")
+    suspend fun getQuote(
+        @Path("id") id: String,
+        @Query("plan") plan: String,
+        @Query("minutes") minutes: Int
+    ): Response<QuoteResponseDto>
 }
