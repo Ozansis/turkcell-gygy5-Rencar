@@ -634,3 +634,37 @@
   JWT süresinin dolup dolmadığına bakmıyor; süresi dolmuş bir token'la
   açılışta yanlışlıkla Home'a düşme riski hâlâ mevcut, bu batch'te
   çözülmedi.
+
+### 2026-07-16 — Ehliyet + Selfie doğrulama: network/repository katmanı (4 dosya)
+- **Ne yapıldı:** `docs/api/openapi.json`'daki `POST /license/upload` (front+back+selfie,
+  üçü de zorunlu, tek istekte multipart) ve `GET /license/status` uçları için
+  Retrofit sözleşmesi kuruldu: `LicenseResponseDto`/`LicenseStatusResponseDto`,
+  `LicenseApiService` (projenin ilk `@Multipart` kullanımı), bunu sağlayan
+  `NetworkModule.provideLicenseApiService`, ve `AuthRepository`'deki
+  `AuthResult<T>` desenini yeniden kullanan `LicenseRepository`
+  (`upload(front: Uri, back: Uri, selfie: Uri)`, `getStatus()`). UI/ekran
+  değişiklikleri, kamera/galeri seçici entegrasyonu ve ConfirmationScreen
+  bilinçli olarak KAPSAM DIŞI bırakıldı.
+- **Değişen dosyalar (yeni):** `data/network/dto/LicenseDtos.kt`,
+  `data/network/LicenseApiService.kt`, `data/repository/LicenseRepository.kt`.
+  **Değişen dosya:** `di/NetworkModule.kt` (`provideLicenseApiService` eklendi).
+- **Neden bu şekilde yapıldı:** `status` alanı, kullanıcı onayıyla projenin
+  `role`/`type`/`transmission`/`status` konvansiyonuyla tutarlı olarak Kotlin
+  enum değil `String` tutuldu (backend yeni bir status değeri döndürürse Gson
+  deserialization'ının çökmesini önlemek için). `LicenseStatusResponseDto`'da
+  openapi şemasına uygun olarak `selfieImageUrl` YOK (yalnız `LicenseResponseDto`'da
+  var). `Uri`→`MultipartBody.Part` dönüşümü için `LicenseRepository`'ye
+  `@ApplicationContext Context` inject edildi (`TokenStore`'un zaten kullandığı
+  desenle tutarlı); `ContentResolver.openInputStream` `Dispatchers.IO` üzerinde
+  okunuyor (ana thread'i bloklamamak için). Görsellerin üç ekranda toplanıp son
+  ekranda birleştirilmesi için gereken state paylaşım mekanizması bu batch'te
+  UYGULANMADI; kullanıcıyla nav-graph-scoped paylaşılan bir ViewModel
+  (`getBackStackEntry` + `hiltViewModel(viewModelStoreOwner=...)`) üzerinde
+  anlaşıldı — `Uri`'lerin nav argümanı olarak taşınması (URI izin kaybı/encode
+  kırılganlığı riski nedeniyle) tercih edilmedi; somutlaştırma sonraki
+  UI-bağlama batch'ine bırakıldı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD
+  SUCCESSFUL (tek uyarı: `@ApplicationContext` ile ilgili, projede `TokenStore.kt`
+  gibi diğer dosyalarda da zaten var olan genel bir Kotlin gelecek-uyumluluk
+  uyarısı, bu değişiklikle ilgisiz). Yeni dosyalar henüz hiçbir ViewModel'den
+  çağrılmadığından runtime/network testi bu batch'te YAPILAMADI.
