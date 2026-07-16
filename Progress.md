@@ -790,3 +790,65 @@
   testi (kamera açma, galeri seçme, önizlemenin gerçekten göründüğü, "Devam Et"in
   disabled/enabled geçişi) bu oturumda YAPILAMADI — sadece derleme ve manifest birleştirme
   doğrulandı.
+
+### 2026-07-16 — SelfieScreen gerçek kameraya + LicenseFlowViewModel'e bağlandı, gerçek upload tetikleniyor (Batch 1, 5 dosya)
+- **Ne yapıldı:** `SelfieContract.State`'teki sahte `isSelfieUploaded: Boolean`
+  (tıklamayla anında `true` olan) kaldırıldı; yerine `selfieUri: Uri?`,
+  `isUploading: Boolean`, `uploadError: String?` ve `isContinueEnabled`
+  computed property'si eklendi. Yeni Intent'ler: `CaptureSelfie` (kamerayı
+  tetikler — galeri seçeneği YOK, selfie için sadece kamera anlamlı),
+  `SelfieImageSelected(uri)`, `UploadStateChanged(isUploading, isUploaded,
+  uploadError)` (bu sonuncusu `VehicleDetailContract.Intent.LocationChanged`
+  ile aynı desende: Route'un başka bir ViewModel'den — burada
+  `LicenseFlowViewModel` — okuduğu state'i kendi ViewModel'ine ilettiği
+  köprü Intent'i). `SelfieRoute`, artık zorunlu `licenseFlowViewModel`
+  parametresi alıyor, License batch'indeki desenle birebir aynı
+  `TakePicture` + `FileProvider` kamera akışını kuruyor (dialog YOK, doğrudan
+  kamera açılıyor), çekilen `Uri`'yi hem `licenseFlowViewModel.setSelfieUri()`'ye
+  hem kendi `SelfieViewModel`'ine yazıyor, `licenseFlowViewModel.state`'i
+  `LaunchedEffect` ile izleyip `UploadStateChanged` Intent'iyle senkronize
+  ediyor. "Devam Et" tıklanınca `TriggerUpload` effect'i Route'ta
+  `licenseFlowViewModel.uploadIfReady()`'i çağırıyor; `isUploading` true iken
+  buton disabled + `CircularProgressIndicator`, `isUploaded` true olunca
+  otomatik Confirmation'a navigate, `uploadError` doluysa mevcut
+  Login/Otp/Maps/VehicleDetail deseniyle aynı Toast gösteriliyor (dead-end
+  effect bırakılmadı). `SelfieScreen`'deki dropzone artık Coil `AsyncImage`
+  ile gerçek selfie önizlemesi gösteriyor. `RenCarNavHost.kt`'de daha önce
+  alınıp hiç geçilmeyen `licenseFlowViewModel`, `SelfieRoute`'a parametre
+  olarak verildi.
+- **Değişen dosyalar:** `feature/auth/selfie/SelfieContract.kt`,
+  `feature/auth/selfie/SelfieViewModel.kt`, `feature/auth/selfie/SelfieRoute.kt`,
+  `feature/auth/selfie/SelfieScreen.kt`, `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcıyla üzerinde anlaşıldığı üzere ortak
+  bir `ui/components/ImageSourcePicker.kt` soyutlaması BİLİNÇLİ OLARAK bu
+  batch'e alınmadı — çıkarılacak olsa bile `LicenseRoute.kt`'nin de o ortak
+  dosyayı kullanacak şekilde refactor edilmesi gerekiyordu (aksi halde tek
+  tüketicili bir soyutlama olurdu), bu da Batch 1'i 5 dosya sınırının üstüne
+  çıkarırdı (Agent.md §2.1). Bunun yerine kamera/`FileProvider` mantığı bu
+  batch'te `SelfieRoute.kt` içinde License'daki desenin geçici bir kopyası
+  olarak yazıldı; ortak dosyaya çıkarma + `LicenseRoute.kt` refactor'ü ayrı,
+  kullanıcının bu batch derlenip test edildikten sonra ayrıca onaylayacağı
+  bir Batch 2 olarak planlandı (henüz UYGULANMADI). Selfie'nin çekilen
+  fotoğrafı, yeni bir `selfie_images` FileProvider cache-path'i eklemek
+  yerine (bu da `file_paths.xml`'e dokunup dosya sayısını 6'ya çıkarırdı)
+  bilinçli olarak mevcut `cacheDir/license_images/` dizinine `selfie_` dosya
+  adı önekiyle yazıldı — bu dizin adı yalnızca bir önbellek klasörü ismi,
+  kullanıcıya hiçbir şekilde görünmüyor. 413 (dosya çok büyük) gibi ayırt
+  edici bir hata mesajı için `LicenseRepository.kt`'ye dokunma seçeneği
+  kullanıcıya soruldu; kullanıcı 5 dosyada kalmayı ve mevcut jenerik "Sunucu
+  hatası (kod: N)." mesaj desenini korumayı tercih etti — `LicenseRepository.kt`
+  bu batch'te DEĞİŞMEDİ. Hata gösterimi için Snackbar yerine mevcut Toast
+  deseni (Login/Otp/Maps/VehicleDetail'deki `ShowError` ile aynı) kullanıldı
+  — Snackbar, projede hiçbir ekranda kurulu olmayan bir `SnackbarHostState`/
+  `Scaffold` altyapısı gerektirdiğinden büyük bir sapma olurdu.
+  `SelfieViewModel`, `LicenseFlowViewModel`'e constructor'dan inject
+  EDİLMEDİ — nav-graph scoping'i olmayan bir ViewModel'in nav-graph-scoped
+  bir ViewModel'e doğrudan bağımlı olması pratik değil (License batch'inde
+  `LicenseViewModel`/`LicenseFlowViewModel` için verilen kararla aynı
+  gerekçe); köprüleme tamamen `SelfieRoute.kt`'de kaldı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ve tam
+  `./gradlew :app:assembleDebug` ile derlendi, ikisi de BUILD SUCCESSFUL, yeni
+  uyarı yok. Emülatör/cihazda runtime/UI testi (gerçek kamera açma, selfie
+  önizlemesinin göründüğü, "Devam Et"in loading/disabled geçişi, gerçek
+  upload'ın Confirmation'a yönlendirdiği, hata Toast'ının göründüğü) bu
+  oturumda YAPILAMADI — sadece derleme doğrulandı.

@@ -142,6 +142,7 @@ fun RenCarNavHost() {
                     hiltViewModel(viewModelStoreOwner = parentEntry)
 
                 SelfieRoute(
+                    licenseFlowViewModel = licenseFlowViewModel,
                     onNavigateToConfirmation = {
                         navController.navigate(RenCarDestinations.CONFIRMATION)
                     },

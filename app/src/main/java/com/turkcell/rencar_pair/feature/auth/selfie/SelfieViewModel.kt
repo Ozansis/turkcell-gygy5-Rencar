@@ -1,5 +1,6 @@
 package com.turkcell.rencar_pair.feature.auth.selfie
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.channels.Channel
@@ -21,18 +22,36 @@ class SelfieViewModel : ViewModel() {
 
     fun onIntent(intent: SelfieContract.Intent) {
         when (intent) {
-            SelfieContract.Intent.UploadSelfie -> handleUploadSelfie()
-            SelfieContract.Intent.Continue      -> handleContinue()
-            SelfieContract.Intent.NavigateBack  -> sendEffect(SelfieContract.Effect.NavigateBack)
+            SelfieContract.Intent.CaptureSelfie          -> handleCaptureSelfie()
+            is SelfieContract.Intent.SelfieImageSelected -> handleSelfieImageSelected(intent.uri)
+            SelfieContract.Intent.Continue                -> handleContinue()
+            is SelfieContract.Intent.UploadStateChanged   -> handleUploadStateChanged(intent.isUploading, intent.isUploaded, intent.uploadError)
+            SelfieContract.Intent.NavigateBack            -> sendEffect(SelfieContract.Effect.NavigateBack)
         }
     }
 
-    private fun handleUploadSelfie() {
-        _state.update { it.copy(isSelfieUploaded = true) }
+    private fun handleCaptureSelfie() {
+        if (_state.value.isUploading) return
+        sendEffect(SelfieContract.Effect.LaunchCamera)
+    }
+
+    private fun handleSelfieImageSelected(uri: Uri) {
+        _state.update { it.copy(selfieUri = uri) }
     }
 
     private fun handleContinue() {
-        sendEffect(SelfieContract.Effect.NavigateToConfirmation)
+        if (!_state.value.isContinueEnabled) return
+        sendEffect(SelfieContract.Effect.TriggerUpload)
+    }
+
+    private fun handleUploadStateChanged(isUploading: Boolean, isUploaded: Boolean, uploadError: String?) {
+        _state.update { it.copy(isUploading = isUploading, uploadError = uploadError) }
+        if (isUploaded) {
+            sendEffect(SelfieContract.Effect.NavigateToConfirmation)
+        }
+        if (uploadError != null) {
+            sendEffect(SelfieContract.Effect.ShowError(uploadError))
+        }
     }
 
     private fun sendEffect(effect: SelfieContract.Effect) {
