@@ -14,8 +14,10 @@ import com.turkcell.rencar_pair.feature.auth.register.RegisterRoute
 import com.turkcell.rencar_pair.feature.auth.selfie.SelfieRoute
 import com.turkcell.rencar_pair.feature.maps.detail.VehicleDetailRoute
 import com.turkcell.rencar_pair.feature.onboarding.OnboardingRoute
+import com.turkcell.rencar_pair.feature.splash.SplashRoute
 
 private object RenCarDestinations {
+    const val SPLASH = "splash"
     const val ONBOARDING = "onboarding"
     const val LOGIN = "login"
     const val REGISTER = "register"
@@ -36,8 +38,28 @@ fun RenCarNavHost() {
 
     NavHost(
         navController    = navController,
-        startDestination = RenCarDestinations.ONBOARDING
+        startDestination = RenCarDestinations.SPLASH
     ) {
+        composable(RenCarDestinations.SPLASH) {
+            SplashRoute(
+                onNavigateToHome = {
+                    navController.navigate(RenCarDestinations.HOME) {
+                        popUpTo(RenCarDestinations.SPLASH) { inclusive = true }
+                    }
+                },
+                onNavigateToOnboarding = {
+                    navController.navigate(RenCarDestinations.ONBOARDING) {
+                        popUpTo(RenCarDestinations.SPLASH) { inclusive = true }
+                    }
+                },
+                onNavigateToLogin = {
+                    navController.navigate(RenCarDestinations.LOGIN) {
+                        popUpTo(RenCarDestinations.SPLASH) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(RenCarDestinations.ONBOARDING) {
             OnboardingRoute(
                 onNavigateToHome = {

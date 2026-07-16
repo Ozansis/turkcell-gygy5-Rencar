@@ -1,29 +1,31 @@
-package com.turkcell.rencar_pair.feature.onboarding
+package com.turkcell.rencar_pair.feature.splash
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
 @Composable
-fun OnboardingRoute(
+fun SplashRoute(
     onNavigateToHome: () -> Unit,
+    onNavigateToOnboarding: () -> Unit,
     onNavigateToLogin: () -> Unit,
-    viewModel: OnboardingViewModel = hiltViewModel()
+    viewModel: SplashViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
             when (effect) {
-                OnboardingContract.Effect.NavigateToHome  -> onNavigateToHome()
-                OnboardingContract.Effect.NavigateToLogin -> onNavigateToLogin()
+                SplashContract.Effect.NavigateToHome       -> onNavigateToHome()
+                SplashContract.Effect.NavigateToOnboarding -> onNavigateToOnboarding()
+                SplashContract.Effect.NavigateToLogin      -> onNavigateToLogin()
             }
         }
     }
 
-    OnboardingScreen(
+    SplashScreen(
         state    = state,
         onIntent = viewModel::onIntent
     )
