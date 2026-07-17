@@ -70,6 +70,16 @@ fun RenCarNavHost() {
                     navController.navigate(RenCarDestinations.LOGIN) {
                         popUpTo(RenCarDestinations.SPLASH) { inclusive = true }
                     }
+                },
+                onNavigateToLicenseVerification = {
+                    navController.navigate(RenCarDestinations.LICENSE_VERIFICATION) {
+                        popUpTo(RenCarDestinations.SPLASH) { inclusive = true }
+                    }
+                },
+                onNavigateToConfirmation = {
+                    navController.navigate(RenCarDestinations.CONFIRMATION) {
+                        popUpTo(RenCarDestinations.SPLASH) { inclusive = true }
+                    }
                 }
             )
         }
@@ -104,6 +114,14 @@ fun RenCarNavHost() {
                 onNavigateToLicenseVerification = {
                     navController.navigate(RenCarDestinations.LICENSE_VERIFICATION)
                 },
+                onNavigateToConfirmation = {
+                    navController.navigate(RenCarDestinations.CONFIRMATION)
+                },
+                onNavigateToHome = {
+                    navController.navigate(RenCarDestinations.HOME) {
+                        popUpTo(RenCarDestinations.LOGIN) { inclusive = true }
+                    }
+                },
                 onNavigateToLogin = { navController.popBackStack() },
                 onNavigateBack = { navController.popBackStack() }
             )
@@ -117,7 +135,15 @@ fun RenCarNavHost() {
             OtpRoute(
                 phoneNumber = phoneNumber,
                 onNavigateToHome = {
+                    navController.navigate(RenCarDestinations.HOME) {
+                        popUpTo(RenCarDestinations.LOGIN) { inclusive = true }
+                    }
+                },
+                onNavigateToLicenseVerification = {
                     navController.navigate(RenCarDestinations.LICENSE_VERIFICATION)
+                },
+                onNavigateToConfirmation = {
+                    navController.navigate(RenCarDestinations.CONFIRMATION)
                 },
                 onNavigateBack = { navController.popBackStack() }
             )
@@ -165,6 +191,11 @@ fun RenCarNavHost() {
                 onNavigateToHome = {
                     navController.navigate(RenCarDestinations.HOME) {
                         popUpTo(RenCarDestinations.ONBOARDING) { inclusive = true }
+                    }
+                },
+                onNavigateToLicenseVerification = {
+                    navController.navigate(RenCarDestinations.LICENSE_VERIFICATION) {
+                        popUpTo(RenCarDestinations.CONFIRMATION) { inclusive = true }
                     }
                 },
                 onNavigateBack = { navController.popBackStack() }

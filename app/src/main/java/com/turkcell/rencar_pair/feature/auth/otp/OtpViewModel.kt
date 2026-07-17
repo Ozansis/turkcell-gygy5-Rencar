@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.turkcell.rencar_pair.data.repository.AuthRepository
 import com.turkcell.rencar_pair.data.repository.AuthResult
+import com.turkcell.rencar_pair.domain.PostAuthDestination
+import com.turkcell.rencar_pair.domain.PostAuthNavigationResolver
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -24,7 +26,8 @@ private const val COUNTRY_CODE = "+90"
 @HiltViewModel(assistedFactory = OtpViewModel.Factory::class)
 class OtpViewModel @AssistedInject constructor(
     @Assisted phoneNumber: String,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val postAuthNavigationResolver: PostAuthNavigationResolver
 ) : ViewModel() {
 
     @AssistedFactory
@@ -67,9 +70,17 @@ class OtpViewModel @AssistedInject constructor(
             val result = authRepository.verifyOtp(COUNTRY_CODE + current.phoneNumber, current.code)
             _state.update { it.copy(isVerifying = false) }
             when (result) {
-                is AuthResult.Success -> sendEffect(OtpContract.Effect.NavigateToHome)
+                is AuthResult.Success -> sendEffect(resolvePostAuthEffect())
                 is AuthResult.Error   -> sendEffect(OtpContract.Effect.ShowError(result.message))
             }
+        }
+    }
+
+    private suspend fun resolvePostAuthEffect(): OtpContract.Effect {
+        return when (postAuthNavigationResolver.resolve()) {
+            PostAuthDestination.Home -> OtpContract.Effect.NavigateToHome
+            PostAuthDestination.LicenseUpload -> OtpContract.Effect.NavigateToLicenseVerification
+            PostAuthDestination.LicensePending -> OtpContract.Effect.NavigateToConfirmation
         }
     }
 

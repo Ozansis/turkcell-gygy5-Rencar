@@ -4,21 +4,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
 @Composable
 fun ConfirmationRoute(
     onNavigateToHome: () -> Unit,
+    onNavigateToLicenseVerification: () -> Unit,
     onNavigateBack: () -> Unit,
-    viewModel: ConfirmationViewModel = viewModel()
+    viewModel: ConfirmationViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
             when (effect) {
-                ConfirmationContract.Effect.NavigateToHome -> onNavigateToHome()
-                ConfirmationContract.Effect.NavigateBack    -> onNavigateBack()
+                ConfirmationContract.Effect.NavigateToHome               -> onNavigateToHome()
+                ConfirmationContract.Effect.NavigateToLicenseVerification -> onNavigateToLicenseVerification()
+                ConfirmationContract.Effect.NavigateBack                 -> onNavigateBack()
             }
         }
     }

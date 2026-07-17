@@ -1248,3 +1248,202 @@
   sonunda) ve `./gradlew :app:installDebug` BUILD SUCCESSFUL, emülatöre
   kuruldu. Banner'ın gerçekten göründüğü ve tıklanınca doğru kiralamaya
   götürdüğü bu oturumda kullanıcı tarafından henüz TEST EDİLMEDİ.
+
+
+### 2026-07-17 — Ortak post-auth yönlendirme mekanizması: PostAuthNavigationResolver + AuthRepository.getMe() (Batch 1, 2 dosya)
+- **Ne yapıldı:** Splash/OTP/Register'ın kullanıcının güncel role/ehliyet durumuna göre doğru
+  ekrana (Home / ehliyet yükleme / ehliyet inceleme bekleme) yönlendirilmesi için tek bir ortak
+  karar mekanizması kuruldu: `AuthRepository`'ye `GET /auth/me`'yi sarmalayan `getMe()`
+  eklendi (uç zaten `AuthApiService`'te tanımlıydı ama hiçbir yerden çağrılmıyordu); yeni
+  `domain/PostAuthNavigationResolver.kt` (yeni `domain/` paketi) — `AuthRepository.getMe()` ve
+  `LicenseRepository.getStatus()`'u orkestre edip `PostAuthDestination` (Home/LicenseUpload/
+  LicensePending) döndüren `@Singleton` bir sınıf. Bu batch, resolver'ı henüz hiçbir ekrana
+  bağlamıyor — sadece altyapı.
+- **Değişen dosyalar:** `data/repository/AuthRepository.kt` (`getMe()` eklendi).
+  **Yeni dosya:** `domain/PostAuthNavigationResolver.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcıyla netleşen karar gereği bu mantık `AuthRepository`'ye
+  eklenen bir fonksiyon DEĞİL, ayrı bir sınıf oldu — repository'lerin tek sorumluluğu (kendi
+  API'sini sarmalamak) korunsun, "hangi role/status hangi ekrana gider" kararı iki
+  repository'nin ÜSTÜNDE bir orkestrasyon katmanına ait olsun diye. Proje ilk kez bir
+  `domain/` paketi açtı (data/feature dışında üçüncü bir katman: ekrana bağlı olmayan,
+  birden fazla repository'yi orkestre eden mantık). `role == "PENDING"` DIŞINDAKİ tüm
+  roller (`CUSTOMER`, teknik olarak `ADMIN`) `Home`'a düşüyor — `ADMIN` için mobil
+  istemcide tanımlı ayrı bir ekran olmadığından güvenli varsayılan. `NOT_SUBMITTED` ve
+  `REJECTED` bilinçli olarak AYNI hedefe (`LicenseUpload`) gidiyor — ikisinde de yapılması
+  gereken aynı (ehliyet yükleme ekranına gitmek); REJECTED'in `rejectReason`'ının
+  gösterilmesi yalnızca Confirmation ekranının kendisini ilgilendiriyor (Batch 5). `getMe()`
+  veya `getStatus()` ağ hatasıyla başarısız olursa kullanıcı onayıyla `Home` fallback'i
+  seçildi (mevcut/önceki davranışla aynı risk seviyesi — token varsa zaten Home'a
+  gidiliyordu). `role != "PENDING"` durumunda `getStatus()` HİÇ çağrılmıyor — gereksiz
+  network isteği önlendi.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` BUILD SUCCESSFUL (Hilt/KSP grafiği
+  `AuthRepository.getMe()` ve `PostAuthNavigationResolver`'ın `AuthRepository`+
+  `LicenseRepository` enjeksiyonuyla sorunsuz üretildi). Bu iki dosya henüz hiçbir
+  ViewModel'den çağrılmadığından runtime/network testi bu batch'te YAPILAMADI — Splash'in bu
+  resolver'ı kullanacağı Batch 2'de gerçek backend'e karşı doğrulanacak.
+
+### 2026-07-17 — Splash artık PostAuthNavigationResolver'ı kullanıyor + gerçek backend'e karşı 3 senaryo doğrulandı (Batch 2, 4 dosya)
+- **Ne yapıldı:** `SplashViewModel.resolveDestination()` artık token varsa (önceki gibi)
+  doğrudan `NavigateToHome` göndermek yerine `PostAuthNavigationResolver.resolve()`'u çağırıp
+  `PostAuthDestination`'ı yeni Effect'lere çeviriyor: `SplashContract.Effect`'e
+  `NavigateToLicenseVerification` ve `NavigateToConfirmation` eklendi; `SplashRoute.kt`'ye
+  bu ikisi için 2 yeni nav callback parametresi eklendi; `RenCarNavHost.kt`'nin `SPLASH`
+  composable bloğu bu 2 yeni callback'i sırasıyla `LICENSE_VERIFICATION` ve `CONFIRMATION`
+  route'larına, mevcut 3 callback'le AYNI `popUpTo(SPLASH){inclusive=true}` deseniyle bağladı.
+  Token yoksa (onboarding/login dalı) HİÇ değişmedi.
+- **Değişen dosyalar:** `feature/splash/SplashContract.kt`, `feature/splash/SplashViewModel.kt`,
+  `feature/splash/SplashRoute.kt`, `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** Batch 1'de kurulan `PostAuthNavigationResolver` aynen
+  kullanıldı, yeni bir karar mantığı yazılmadı. Diğer 3 Splash Effect'i (`NavigateToHome`/
+  `NavigateToOnboarding`/`NavigateToLogin`) ve onların `popUpTo` deseni hiç değiştirilmedi —
+  yeni 2 Effect aynı deseni birebir tekrarlıyor (tutarlılık, ayrı bir istisna dalı yok).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` BUILD SUCCESSFUL. Kullanıcının
+  açık talebiyle emülatörde (Pixel_6a) gerçek backend'e (`rencarv2.halitkalayci.com`) karşı
+  3 senaryo UÇTAN UCA doğrulandı (Claude tarafından `adb`/`uiautomator` ile sürülerek —
+  telefon input alanındaki bilinen scramble bug'ı `KEYCODE_MOVE_END` + digit-by-digit
+  yazma ile aşıldı, OTP kutusu ve buton koordinatları `uiautomator dump` ile bulundu):
+  - `+905550000401` (curl ile register edilen taze hesap, PENDING + NOT_SUBMITTED) →
+    Login→OTP→force-stop→relaunch sonrası Splash doğru şekilde **Ehliyet Doğrulama**
+    ekranına yönlendirdi.
+  - `+905550000302` (curl ile lisans yüklenip UNDER_REVIEW yapılan hesap) → aynı akış
+    sonrası Splash doğru şekilde **Onay (Confirmation)** ekranına yönlendirdi.
+  - `+905550000102` (bilinen CUSTOMER test hesabı) → aynı akış sonrası Splash doğru şekilde
+    **Ana ekrana (Home/Harita)** yönlendirdi.
+  Üçü de beklenen `PostAuthDestination` dallanmasıyla birebir eşleşti.
+- **Önemli bulgu (kapsam dışı, ayrı görev):** İlk denemede `+905550000301` adlı bir test
+  hesabı NOT_SUBMITTED olarak kuruldu ama birkaç dakika sonra tekrar kontrol edildiğinde
+  (kodumuza hiç dokunulmadan) durumu UNDER_REVIEW'e dönüşmüş bulundu — gerçek `front`/`back`
+  görsel URL'leriyle birlikte. Bu, uygulama kodundan kaynaklanmıyor: `rencarv2.halitkalayci.com`
+  paylaşımlı bir staging backend'i, muhtemelen başka bir oturum/süreç aynı öngörülebilir
+  test numarası aralığını (`555000030x`) kullanıyor. **Hatırlatma:** bu backend'de sıralı/
+  tahmin edilebilir telefon numaralarıyla (`55500003xx` gibi) test hesabı açmak, paralel
+  kullanımda veriyi kirletebiliyor — ileride test hesabı açarken rastgele/geniş bir numara
+  aralığı tercih edilmeli.
+
+### 2026-07-17 — OTP'nin koşulsuz LICENSE_VERIFICATION bug'ı düzeltildi: OTP artık PostAuthNavigationResolver'ı kullanıyor (Batch 3, 4 dosya)
+- **Ne yapıldı:** Görevin bildirdiği asıl bug düzeltildi. `OtpContract.kt`'ye
+  `NavigateToLicenseVerification`/`NavigateToConfirmation` Effect'leri eklendi (mevcut
+  `NavigateToHome`'un yanına). `OtpViewModel.kt`, başarılı `verifyOtp()` sonrası artık
+  koşulsuz `NavigateToHome` göndermek yerine `PostAuthNavigationResolver.resolve()`'u çağırıp
+  sonucu Effect'e çeviriyor (Splash'teki `resolvePostAuthEffect()` ile birebir aynı desen).
+  `OtpRoute.kt`'ye 2 yeni nav callback parametresi eklendi. `RenCarNavHost.kt`'nin `OTP`
+  composable bloğu artık 3 hedefe kablolu: `onNavigateToHome` artık gerçekten
+  `RenCarDestinations.HOME`'a gidiyor (önceden LICENSE_VERIFICATION'a gidiyordu) ve YENİ
+  olarak `popUpTo(LOGIN){inclusive=true}` kullanıyor (Login+Otp'yi backstack'ten temizler —
+  Splash/Confirmation'ın Home'a geçişte zaten kullandığı hijyen deseniyle tutarlı);
+  `onNavigateToLicenseVerification`/`onNavigateToConfirmation` ise Register'ın
+  `onNavigateToLicenseVerification`'ıyla aynı şekilde `popUpTo` KULLANMIYOR (geri tuşuyla
+  OTP ekranına dönülebilsin diye, mevcut davranışla tutarlı).
+- **Değişen dosyalar:** `feature/auth/otp/OtpContract.kt`, `feature/auth/otp/OtpViewModel.kt`,
+  `feature/auth/otp/OtpRoute.kt`, `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** Batch 1'de kurulan `PostAuthNavigationResolver` aynen yeniden
+  kullanıldı — OTP ve Splash artık AYNI karar mantığını çağırıyor, kod tekrarı yok. `Home`
+  dalına `popUpTo(LOGIN)` eklenmesi bilinçli bir ek düzeltme: kullanıcı onayıyla netleşen
+  plana göre (bkz. plan dosyası), token zaten geçerli bir CUSTOMER oturumu kurulduğunda geri
+  tuşuyla Login/Otp ekranlarına dönülmesinin hiçbir anlamı yok — bu, Splash/Confirmation'ın
+  Home'a geçişte zaten uyguladığı deseni OTP'ye de getiriyor.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ve `./gradlew :app:installDebug`
+  BUILD SUCCESSFUL. Kullanıcının açık talebiyle emülatörde gerçek backend'e karşı ASIL BUG
+  SENARYOSU doğrulandı: `+905550000102` (CUSTOMER) ile Login→OTP akışı SIFIRDAN (önbellekte
+  token olmadan, `pm clear` sonrası) çalıştırıldı — OTP doğrulandığında uygulama artık
+  doğrudan **Ana ekrana (Home/Harita)** düştü, önceki (düzeltilmeden önceki) davranışın
+  aksine Ehliyet Doğrulama ekranına DÜŞMEDİ. Diğer iki dal (`LicenseUpload`/`LicensePending`)
+  Batch 2'de aynı resolver ile zaten doğrulanmıştı, kod birebir aynı olduğundan bu batch'te
+  tekrar test edilmedi.
+
+### 2026-07-17 — Register de PostAuthNavigationResolver'ı kullanıyor: tutarlılık (Batch 4, 4 dosya)
+- **Ne yapıldı:** `RegisterContract.kt`'ye `NavigateToConfirmation`/`NavigateToHome`
+  Effect'leri eklendi (mevcut `NavigateToLicenseVerification`'ın yanına).
+  `RegisterViewModel.kt`, başarılı `register()` sonrası artık koşulsuz
+  `NavigateToLicenseVerification` göndermek yerine Splash/OTP'deki BİREBİR AYNI
+  `resolvePostAuthEffect()` desenini kullanıp `PostAuthNavigationResolver.resolve()`'u
+  çağırıyor. `RegisterRoute.kt`'ye 2 yeni nav callback parametresi eklendi.
+  `RenCarNavHost.kt`'nin `REGISTER` composable bloğu artık 3 hedefe kablolu:
+  `onNavigateToLicenseVerification` (değişmedi, popUpTo yok), YENİ
+  `onNavigateToConfirmation` (popUpTo yok, aynı desen), YENİ `onNavigateToHome` —
+  kullanıcının açıkça istediği gibi OTP'nin Home dalıyla TUTARLI olarak
+  `popUpTo(LOGIN){inclusive=true}` kullanıyor (REGISTER, LOGIN'in üstünde push edildiğinden
+  aynı mantık burada da geçerli: token zaten geçerli bir CUSTOMER oturumu kurulduysa geri
+  tuşuyla Login/Register'a dönmenin anlamı yok).
+- **Değişen dosyalar:** `feature/auth/register/RegisterContract.kt`,
+  `feature/auth/register/RegisterViewModel.kt`, `feature/auth/register/RegisterRoute.kt`,
+  `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** Bu batch bir bug düzeltmiyor — taze bir kayıt her zaman
+  PENDING+NOT_SUBMITTED sonucunu ürettiğinden (`Home`/`Confirmation` dallarına gerçek kayıt
+  akışıyla ulaşmak mümkün değil, backend zaten aynı email/telefonla ikinci kaydı
+  reddediyor) — amaç saf tutarlılık: Splash/OTP/Register'ın hepsi artık AYNI karar
+  mekanizmasını çağırıyor, "hangi role/status hangi ekrana gider" kararı tek bir yerde
+  (`PostAuthNavigationResolver`) yaşıyor.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ve `./gradlew :app:installDebug`
+  BUILD SUCCESSFUL. Emülatörde gerçek backend'e karşı uçtan uca test edildi: taze bir
+  hesap (`+905550000501`, `test.register.20260717@rencar.test`) Register formu üzerinden
+  gerçekten oluşturuldu — kayıt sonrası uygulama beklenen şekilde **Ehliyet Doğrulama**
+  ekranına düştü (resolver `PENDING`+`NOT_SUBMITTED` için doğru dala düşüyor,
+  regresyon yok). `Home`/`Confirmation` dalları gerçek kayıt akışıyla ulaşılamaz
+  olduğundan ayrıca test edilmedi — kod `resolvePostAuthEffect()` fonksiyonu Splash/OTP'de
+  zaten doğrulanmış olan AYNI fonksiyon.
+
+### 2026-07-17 — ConfirmationViewModel gerçek GET /license/status'a bağlandı: polling + APPROVED/REJECTED dallanması + Yeniden Yükle (Batch 5, 5 dosya)
+- **Ne yapıldı:** Görevin son maddesi tamamlandı. `ConfirmationContract.kt`'deki tamamen boş
+  `State(val unit: Unit = Unit)` kaldırıldı; yerine `status: String?`, `rejectReason: String?`,
+  `isLoading: Boolean` alanları ve `isContinueEnabled`/`isRejected`/`isTerminal` computed
+  property'leri eklendi (mvi-contracts.md'nin computed-property kuralına uygun).
+  `ConfirmationViewModel.kt` artık plain `ViewModel()` değil `@HiltViewModel` —
+  `LicenseRepository` inject ediliyor. `ActiveRentalViewModel.kt`'deki (mvi-viewmodel-
+  rules.md §8) BİREBİR AYNI polling deseni (`Job?` + `while (isActive) { ...; delay(5000) }`,
+  `onCleared()`'da iptal) kullanılarak `GET /license/status` her 5 saniyede bir tekrar
+  çağrılıyor; `status` `APPROVED` veya `REJECTED` (terminal) olduğunda döngü kendiliğinden
+  duruyor, `UNDER_REVIEW` iken (veya bir ağ hatası sonrası — hata durumunda `status`
+  değişmediğinden döngü otomatik devam ediyor) tekrar denemeye devam ediyor. Yeni
+  `Intent.ReuploadClicked` ve `Effect.NavigateToLicenseVerification` eklendi.
+  `ConfirmationScreen.kt` artık `state`'e göre 3 farklı görünüm çiziyor: UNDER_REVIEW
+  (mevcut tasarım, "Devam Et" disabled), APPROVED (yeşil değil ama birincil renkte
+  checkmark, "Ehliyetin onaylandı, kiralamaya başlayabilirsin", bilgi banner'ı kayboluyor,
+  "Devam Et" enabled), REJECTED (kırmızı `ErrorOutline` ikonu, `rejectReason` banner'da
+  gösteriliyor, alt buton "Devam Et" yerine "Yeniden Yükle" oluyor).
+  `ConfirmationRoute.kt` `viewModel()` yerine `hiltViewModel()` kullanıyor, yeni
+  `onNavigateToLicenseVerification` callback'ini `NavigateToLicenseVerification` Effect'ine
+  bağlıyor. `RenCarNavHost.kt`'nin `CONFIRMATION` bloğuna bu callback eklendi —
+  `LICENSE_VERIFICATION`'a `popUpTo(CONFIRMATION){inclusive=true}` ile navigate ediyor
+  (Confirmation'ı backstack'ten temizleyip License'ı yerine koyuyor).
+- **Değişen dosyalar:** `feature/auth/confirmation/ConfirmationContract.kt`,
+  `ConfirmationViewModel.kt`, `ConfirmationRoute.kt`, `ConfirmationScreen.kt`,
+  `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** `LICENSE_VERIFICATION`'a `popUpTo(CONFIRMATION)` ile
+  navigate etmek, Compose Navigation'ın iç içe `license-flow` grafiğine (LicenseFlowViewModel
+  scope'lu) DIŞARIDAN doğrudan girişi native desteklediği PROGRESS.md'de zaten doğrulanmış
+  bir kalıp olduğundan (bkz. 2026-07-16 kaydı) — bu, otomatik olarak TAZE bir
+  `LicenseFlowViewModel` örneği (boş front/back/selfie URI'leri) yaratıyor, REJECTED sonrası
+  yeniden yükleme için doğru davranış (eski reddedilen görseller tekrar kullanılmamalı).
+  `status`/`rejectReason` ham `String` tutuldu (projenin genel konvansiyonuyla tutarlı,
+  `LicenseStatusResponseDto` zaten böyle). Polling hata durumunda DURMUYOR (yalnızca terminal
+  durumlarda duruyor) — geçici bir ağ kesintisinin kullanıcıyı sonsuza kadar "kontrol
+  edilemedi" durumunda bırakmaması için, `ActiveRentalViewModel`'in 404 dışında hata almasa
+  bile pollinge devam etme mantığıyla ruh olarak tutarlı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ve `./gradlew :app:installDebug`
+  BUILD SUCCESSFUL. Emülatörde gerçek backend'e karşı, admin onaylama/reddetme uçları
+  (`PATCH /admin/licenses/{id}/approve`, `.../reject`) kullanılarak İKİ CANLI POLLING
+  SENARYOSU uçtan uca doğrulandı:
+  - UNDER_REVIEW hesabı (`+905550000302`) ile Confirmation ekranı açıkken (disabled "Devam
+    Et" + bekleme mesajı doğrulandı), admin API'siyle lisans REDDEDİLDİ — ekran hiçbir
+    kullanıcı etkileşimi olmadan ~5 saniye içinde kendiliğinden REJECTED görünümüne geçti
+    (kırmızı ikon, "Ehliyetin reddedildi", rejectReason banner'da doğru metinle göründü,
+    buton "Yeniden Yükle"ye döndü). "Yeniden Yükle"ye basıldığında uygulama gerçekten
+    BOŞ (yeni) bir Ehliyet Doğrulama ekranına döndü.
+  - Taze bir hesap (`+905550000603`) ile Confirmation ekranı açıkken (yine UNDER_REVIEW
+    görünümü doğrulandı), admin API'siyle lisans ONAYLANDI — ekran ~5 saniye içinde
+    kendiliğinden APPROVED görünümüne geçti ("Ehliyetin onaylandı, kiralamaya
+    başlayabilirsin", bilgi banner'ı kayboldu, "Devam Et" enabled oldu). "Devam Et"e
+    basıldığında uygulama gerçekten Ana ekrana (Home/Harita) geçti.
+  Her iki senaryo da polling mekanizmasının, durum dallanmasının ve navigasyonun gerçek
+  backend'e karşı uçtan uca çalıştığını kanıtladı.
+- **Yan not (test altyapısı, kod değil):** İlk reject denemesinde Türkçe karakterli
+  (`ğ`/`ı` içeren) bir `reason` metni Windows/Git Bash terminal kodlama sorunu yüzünden
+  backend'e bozuk UTF-8 (U+FFFD) olarak gitti; bu bir uygulama hatası değil, test
+  ortamındaki `curl` çağrısının terminal kod sayfası sorunuydu — ASCII-güvenli bir metinle
+  tekrarlanarak aşıldı. Uygulamanın kendisi `rejectReason`'ı olduğu gibi gösteriyor,
+  encoding sorunu yalnızca bu oturumun admin-API test aracına özgüydü.
+
+Bu, kullanıcının başlangıçta bildirdiği görevin TÜM maddeleri (ortak post-auth yönlendirme
+mekanizması + Confirmation'ın gerçek API'ye bağlanması) tamamlandı ve gerçek backend'e karşı
+uçtan uca doğrulandı anlamına gelir.

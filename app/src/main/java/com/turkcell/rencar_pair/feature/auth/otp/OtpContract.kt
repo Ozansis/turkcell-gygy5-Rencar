@@ -24,6 +24,8 @@ object OtpContract {
 
     sealed interface Effect {
         data object NavigateToHome : Effect
+        data object NavigateToLicenseVerification : Effect
+        data object NavigateToConfirmation : Effect
         data object NavigateBack : Effect
         data class ShowError(val message: String) : Effect
     }

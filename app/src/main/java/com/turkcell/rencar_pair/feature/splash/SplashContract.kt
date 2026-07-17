@@ -10,5 +10,7 @@ object SplashContract {
         data object NavigateToHome : Effect
         data object NavigateToOnboarding : Effect
         data object NavigateToLogin : Effect
+        data object NavigateToLicenseVerification : Effect
+        data object NavigateToConfirmation : Effect
     }
 }
