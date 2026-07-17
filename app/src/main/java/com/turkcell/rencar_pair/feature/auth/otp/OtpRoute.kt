@@ -12,6 +12,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 fun OtpRoute(
     phoneNumber: String,
     onNavigateToHome: () -> Unit,
+    onNavigateToLicenseVerification: () -> Unit,
+    onNavigateToConfirmation: () -> Unit,
     onNavigateBack: () -> Unit,
     viewModel: OtpViewModel = hiltViewModel<OtpViewModel, OtpViewModel.Factory>(
         creationCallback = { factory -> factory.create(phoneNumber) }
@@ -23,9 +25,11 @@ fun OtpRoute(
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
             when (effect) {
-                OtpContract.Effect.NavigateToHome -> onNavigateToHome()
-                OtpContract.Effect.NavigateBack    -> onNavigateBack()
-                is OtpContract.Effect.ShowError    -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+                OtpContract.Effect.NavigateToHome                -> onNavigateToHome()
+                OtpContract.Effect.NavigateToLicenseVerification -> onNavigateToLicenseVerification()
+                OtpContract.Effect.NavigateToConfirmation        -> onNavigateToConfirmation()
+                OtpContract.Effect.NavigateBack                  -> onNavigateBack()
+                is OtpContract.Effect.ShowError                  -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
             }
         }
     }

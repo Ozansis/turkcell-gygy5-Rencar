@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.turkcell.rencar_pair.data.local.OnboardingPreferences
 import com.turkcell.rencar_pair.data.local.TokenStore
+import com.turkcell.rencar_pair.domain.PostAuthDestination
+import com.turkcell.rencar_pair.domain.PostAuthNavigationResolver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.async
@@ -22,7 +24,8 @@ private const val MIN_SPLASH_DURATION_MS = 800L
 @HiltViewModel
 class SplashViewModel @Inject constructor(
     private val tokenStore: TokenStore,
-    private val onboardingPreferences: OnboardingPreferences
+    private val onboardingPreferences: OnboardingPreferences,
+    private val postAuthNavigationResolver: PostAuthNavigationResolver
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SplashContract.State())
@@ -53,9 +56,17 @@ class SplashViewModel @Inject constructor(
     private suspend fun resolveDestination(): SplashContract.Effect {
         val hasValidToken = tokenStore.accessToken != null && tokenStore.readRefreshToken() != null
         return when {
-            hasValidToken -> SplashContract.Effect.NavigateToHome
+            hasValidToken -> resolvePostAuthEffect()
             !onboardingPreferences.hasSeenOnboarding() -> SplashContract.Effect.NavigateToOnboarding
             else -> SplashContract.Effect.NavigateToLogin
+        }
+    }
+
+    private suspend fun resolvePostAuthEffect(): SplashContract.Effect {
+        return when (postAuthNavigationResolver.resolve()) {
+            PostAuthDestination.Home -> SplashContract.Effect.NavigateToHome
+            PostAuthDestination.LicenseUpload -> SplashContract.Effect.NavigateToLicenseVerification
+            PostAuthDestination.LicensePending -> SplashContract.Effect.NavigateToConfirmation
         }
     }
 

@@ -17,9 +17,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -65,7 +67,7 @@ fun ConfirmationScreen(
             Spacer(Modifier.height(4.dp))
 
             Text(
-                text  = "Bilgilerin inceleniyor",
+                text  = subtitleFor(state),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -76,34 +78,63 @@ fun ConfirmationScreen(
 
             Spacer(Modifier.height(40.dp))
 
-            ReviewStatus()
+            ReviewStatus(state)
 
             Spacer(Modifier.height(20.dp))
 
-            InfoBanner()
+            InfoBanner(state)
 
             Spacer(Modifier.weight(1f))
 
-            Button(
-                onClick   = { onIntent(ConfirmationContract.Intent.Continue) },
-                modifier  = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape     = RoundedCornerShape(16.dp),
-                colors    = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
-            ) {
-                Text(
-                    text  = "Devam Et",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White
-                )
+            if (state.isRejected) {
+                Button(
+                    onClick   = { onIntent(ConfirmationContract.Intent.ReuploadClicked) },
+                    modifier  = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape     = RoundedCornerShape(16.dp),
+                    colors    = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                ) {
+                    Text(
+                        text  = "Yeniden Yükle",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White
+                    )
+                }
+            } else {
+                Button(
+                    onClick   = { onIntent(ConfirmationContract.Intent.Continue) },
+                    enabled   = state.isContinueEnabled,
+                    modifier  = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape     = RoundedCornerShape(16.dp),
+                    colors    = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                ) {
+                    Text(
+                        text  = "Devam Et",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White
+                    )
+                }
             }
 
             Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+private fun subtitleFor(state: ConfirmationContract.State): String {
+    return when (state.status) {
+        "APPROVED" -> "Ehliyetin onaylandı"
+        "REJECTED" -> "Ehliyetin reddedildi"
+        else       -> "Bilgilerin inceleniyor"
     }
 }
 
@@ -130,7 +161,7 @@ private fun BackButton(onClick: () -> Unit) {
 }
 
 @Composable
-private fun ReviewStatus() {
+private fun ReviewStatus(state: ConfirmationContract.State) {
     Column(
         modifier            = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -140,22 +171,29 @@ private fun ReviewStatus() {
             modifier         = Modifier
                 .size(72.dp)
                 .background(
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (state.isRejected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                     shape = CircleShape
                 )
         ) {
-            Icon(
-                imageVector        = Icons.Filled.CheckCircle,
-                contentDescription = null,
-                tint               = Color.White,
-                modifier           = Modifier.size(36.dp)
-            )
+            if (state.isLoading && state.status == null) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    color    = Color.White
+                )
+            } else {
+                Icon(
+                    imageVector        = if (state.isRejected) Icons.Filled.ErrorOutline else Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint               = Color.White,
+                    modifier           = Modifier.size(36.dp)
+                )
+            }
         }
 
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text      = "Ehliyet ve selfie bilgilerin alındı",
+            text      = statusMessageFor(state),
             style     = MaterialTheme.typography.labelLarge,
             color     = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
@@ -163,8 +201,18 @@ private fun ReviewStatus() {
     }
 }
 
+private fun statusMessageFor(state: ConfirmationContract.State): String {
+    return when (state.status) {
+        "APPROVED" -> "Ehliyetin onaylandı, kiralamaya başlayabilirsin"
+        "REJECTED" -> "Ehliyet başvurun reddedildi"
+        else       -> "Ehliyet ve selfie bilgilerin alındı"
+    }
+}
+
 @Composable
-private fun InfoBanner() {
+private fun InfoBanner(state: ConfirmationContract.State) {
+    if (state.status == "APPROVED") return
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -174,18 +222,26 @@ private fun InfoBanner() {
         verticalAlignment = Alignment.Top
     ) {
         Icon(
-            imageVector        = Icons.Filled.Info,
+            imageVector        = if (state.isRejected) Icons.Filled.ErrorOutline else Icons.Filled.Info,
             contentDescription = null,
-            tint               = MaterialTheme.colorScheme.primary,
+            tint               = if (state.isRejected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
             modifier           = Modifier.size(18.dp)
         )
 
         Spacer(Modifier.width(8.dp))
 
         Text(
-            text  = "Doğrulama genelde birkaç dakika sürer. Bu süre boyunca uygulamayı kullanmaya devam edebilirsin.",
+            text  = infoMessageFor(state),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+private fun infoMessageFor(state: ConfirmationContract.State): String {
+    if (state.isRejected) {
+        return state.rejectReason
+            ?: "Ehliyet başvurun reddedildi. Lütfen bilgilerini kontrol edip yeniden yükle."
+    }
+    return "Doğrulama genelde birkaç dakika sürer. Bu süre boyunca uygulamayı kullanmaya devam edebilirsin."
 }

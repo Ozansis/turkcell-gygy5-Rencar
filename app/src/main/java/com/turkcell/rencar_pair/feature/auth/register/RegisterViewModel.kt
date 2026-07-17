@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.turkcell.rencar_pair.data.repository.AuthRepository
 import com.turkcell.rencar_pair.data.repository.AuthResult
+import com.turkcell.rencar_pair.domain.PostAuthDestination
+import com.turkcell.rencar_pair.domain.PostAuthNavigationResolver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel
@@ -17,7 +19,8 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val postAuthNavigationResolver: PostAuthNavigationResolver
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(RegisterContract.State())
@@ -80,9 +83,17 @@ class RegisterViewModel @Inject constructor(
             )
             _state.update { it.copy(isSubmitting = false) }
             when (result) {
-                is AuthResult.Success -> sendEffect(RegisterContract.Effect.NavigateToLicenseVerification)
+                is AuthResult.Success -> sendEffect(resolvePostAuthEffect())
                 is AuthResult.Error -> sendEffect(RegisterContract.Effect.ShowError(result.message))
             }
+        }
+    }
+
+    private suspend fun resolvePostAuthEffect(): RegisterContract.Effect {
+        return when (postAuthNavigationResolver.resolve()) {
+            PostAuthDestination.Home -> RegisterContract.Effect.NavigateToHome
+            PostAuthDestination.LicenseUpload -> RegisterContract.Effect.NavigateToLicenseVerification
+            PostAuthDestination.LicensePending -> RegisterContract.Effect.NavigateToConfirmation
         }
     }
 

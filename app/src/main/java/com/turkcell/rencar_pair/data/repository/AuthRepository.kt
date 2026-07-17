@@ -7,6 +7,7 @@ import com.turkcell.rencar_pair.data.network.dto.LoginDto
 import com.turkcell.rencar_pair.data.network.dto.OtpRequiredResponseDto
 import com.turkcell.rencar_pair.data.network.dto.RefreshTokenDto
 import com.turkcell.rencar_pair.data.network.dto.RegisterDto
+import com.turkcell.rencar_pair.data.network.dto.UserResponseDto
 import com.turkcell.rencar_pair.data.network.dto.VerifyOtpDto
 import java.io.IOException
 import javax.inject.Inject
@@ -72,6 +73,8 @@ class AuthRepository @Inject constructor(
     suspend fun logout() {
         tokenStore.clear()
     }
+
+    suspend fun getMe(): AuthResult<UserResponseDto> = safeCall { authApiService.me() }
 
     private suspend fun <T> safeCall(call: suspend () -> Response<T>): AuthResult<T> {
         return try {

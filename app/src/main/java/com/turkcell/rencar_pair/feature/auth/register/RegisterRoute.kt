@@ -18,6 +18,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 @Composable
 fun RegisterRoute(
     onNavigateToLicenseVerification: () -> Unit,
+    onNavigateToConfirmation: () -> Unit,
+    onNavigateToHome: () -> Unit,
     onNavigateToLogin: () -> Unit,
     onNavigateBack: () -> Unit,
     viewModel: RegisterViewModel = hiltViewModel()
@@ -29,6 +31,8 @@ fun RegisterRoute(
         viewModel.effect.collect { effect ->
             when (effect) {
                 RegisterContract.Effect.NavigateToLicenseVerification -> onNavigateToLicenseVerification()
+                RegisterContract.Effect.NavigateToConfirmation -> onNavigateToConfirmation()
+                RegisterContract.Effect.NavigateToHome -> onNavigateToHome()
                 RegisterContract.Effect.NavigateToLogin -> onNavigateToLogin()
                 RegisterContract.Effect.NavigateBack -> onNavigateBack()
                 is RegisterContract.Effect.ShowError -> snackbarHostState.showSnackbar(effect.message)

@@ -11,6 +11,8 @@ fun SplashRoute(
     onNavigateToHome: () -> Unit,
     onNavigateToOnboarding: () -> Unit,
     onNavigateToLogin: () -> Unit,
+    onNavigateToLicenseVerification: () -> Unit,
+    onNavigateToConfirmation: () -> Unit,
     viewModel: SplashViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -18,9 +20,11 @@ fun SplashRoute(
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
             when (effect) {
-                SplashContract.Effect.NavigateToHome       -> onNavigateToHome()
-                SplashContract.Effect.NavigateToOnboarding -> onNavigateToOnboarding()
-                SplashContract.Effect.NavigateToLogin      -> onNavigateToLogin()
+                SplashContract.Effect.NavigateToHome                 -> onNavigateToHome()
+                SplashContract.Effect.NavigateToOnboarding           -> onNavigateToOnboarding()
+                SplashContract.Effect.NavigateToLogin                -> onNavigateToLogin()
+                SplashContract.Effect.NavigateToLicenseVerification  -> onNavigateToLicenseVerification()
+                SplashContract.Effect.NavigateToConfirmation         -> onNavigateToConfirmation()
             }
         }
     }
