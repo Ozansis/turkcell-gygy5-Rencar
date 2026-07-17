@@ -175,6 +175,9 @@ fun RenCarNavHost() {
             MainScaffold(
                 onNavigateToVehicleDetail = { vehicleId, distanceMeters ->
                     navController.navigate(RenCarDestinations.vehicleDetailRoute(vehicleId, distanceMeters))
+                },
+                onNavigateToActiveRental = { rentalId ->
+                    navController.navigate(RenCarDestinations.rentalActiveRoute(rentalId))
                 }
             )
         }

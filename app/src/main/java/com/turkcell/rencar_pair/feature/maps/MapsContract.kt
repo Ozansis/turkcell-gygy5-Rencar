@@ -7,7 +7,9 @@ object MapsContract {
         val hasLocationPermission: Boolean = false,
         val vehicles: List<NearbyVehicle> = emptyList(),
         val selectedType: VehicleType? = null,
-        val isLoading: Boolean = false
+        val isLoading: Boolean = false,
+        val activeRentalId: String? = null,
+        val activeRentalVehicleLabel: String = ""
     ) {
         val filteredVehicles: List<NearbyVehicle> get() =
             if (selectedType == null) vehicles else vehicles.filter { it.type == selectedType }
@@ -23,11 +25,13 @@ object MapsContract {
         data class VehicleMarkerClicked(val vehicleId: String)    : Intent
         data object RecenterClicked                               : Intent
         data object FindNearestClicked                            : Intent
+        data object ActiveRentalBannerClicked                     : Intent
     }
 
     sealed interface Effect {
         data object RequestLocationRefresh                        : Effect
         data class NavigateToVehicleDetail(val vehicleId: String, val distanceMeters: Int) : Effect
+        data class NavigateToActiveRental(val rentalId: String)   : Effect
         data object ShowLocationPermissionDeniedMessage           : Effect
         data class ShowError(val message: String)                 : Effect
     }

@@ -1095,3 +1095,156 @@
   kuruldu. Emülatörde gerçek kamera + gerçek `POST /rentals/{id}/photos`
   yükleme akışı bu oturumda henüz TEST EDİLMEDİ — kullanıcı tarafından
   ayrıca doğrulanacak.
+
+
+### 2026-07-17 — Aktif Yolculuk ekranı yeniden tasarlandı: harita rota izi + verilen tasarıma göre yeniden düzen (4 dosya, 3 batch)
+- **Ne yapıldı:** Verilen tasarıma göre Aktif Kiralama ekranı baştan
+  düzenlendi: sabit üst bölüm ("Aktif Yolculuk" / "Süre ve ücret canlı
+  işliyor" + araç bilgi kartı: marka/model, plaka · plan etiketi), ortada
+  harita, alt sheet'te "Geçen süre" + "Başlangıç: dd.MM.yyyy HH:mm" +
+  "Anlık ücret"/"Mesafe" kartları + açılış ücreti notu + mevcut butonlar.
+  `RencarMap` bileşenine yeni opsiyonel `routePoints: List<GeoPoint>`
+  parametresi ve noktalı (dashed) `LineLayer` eklendi; `ActiveRentalViewModel`
+  artık `VehicleLocationSocketClient`'tan (`/ws/locations` — zaten mevcuttu)
+  gelen HER konum güncellemesini `routePoints` listesine biriktirip
+  (aynı nokta tekrarını atlayarak, son 300 nokta ile sınırlı) haritaya
+  aktarıyor; böylece aracın ekran açıkken izlediği yol noktalı çizgi olarak
+  görünüyor.
+- **Değişen dosyalar:** Batch 1 — `feature/maps/RencarMap.kt` (route
+  source/layer eklendi, geriye dönük uyumlu — diğer ekranlar parametre
+  vermediği için etkilenmedi). Batch 2 — `feature/rental/active/ActiveRentalContract.kt`
+  (`plate`, `plan`, `startFee`, `startedAtIso`, `routePoints` alanları +
+  `planLabel`/`formattedStartedAt`/`formattedStartFeeNote` computed'ları),
+  `ActiveRentalViewModel.kt` (poll'da bu alanlar dolduruluyor, soket
+  callback'i rota biriktiriyor). Batch 3 — `feature/rental/active/ActiveRentalScreen.kt`
+  (tam yeniden yazıldı).
+- **Neden bu şekilde yapıldı:** Backend'de araç konum GEÇMİŞİ döndüren bir
+  endpoint yok (`docs/api/openapi.json`'da yalnızca anlık konum: `/ws/locations`
+  soketi ve müşteriye kapalı `/admin/locations` anlık snapshot'ı) — bu
+  yüzden noktalı iz UYDURULMADI, yalnızca ekran açıkken soketten gerçekten
+  alınan noktalar biriktirilerek çiziliyor (bilinen sınırlama: ekran
+  açılmadan önceki geçmiş gösterilemez). Tasarımdaki geri (`<`) ok ikonu
+  BİLİNÇLİ OLARAK eklenmedi — onaylanan 4 dosyalık batch listesi
+  `ActiveRentalRoute.kt` ve `RenCarNavHost.kt`'yi içermiyordu; geri
+  navigasyonu için yeni bir Effect eklemek bu iki dosyaya da dokunmayı
+  gerektirip onaylanan kapsamı aşardı. Kullanıcı isterse ayrı bir küçük
+  batch olarak eklenebilir.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` (her 3 batch
+  sonunda) ve `./gradlew :app:installDebug` BUILD SUCCESSFUL, emülatöre
+  kuruldu. Gerçek bir aktif kiralama üzerinde haritada rota iziminin
+  gerçekten çizildiği bu oturumda TEST EDİLMEDİ — kullanıcı tarafından
+  doğrulanacak.
+
+
+### 2026-07-17 — AuthInterceptor'a otomatik token yenileme (401 -> /auth/refresh -> tekrar dene) eklendi (1 dosya)
+- **Ne yapıldı:** Erişim token'ı 15 dakikada bir dolduğunda uygulamanın
+  test oturumları sürekli kesiliyordu (kullanıcı bunu üç kez ayrı ayrı
+  fark etti — "sunucu hatası", "araçlar gözükmüyor" şikayetleri aslında
+  hep bu kökten geliyordu). `AuthInterceptor.kt`'ye şu mantık eklendi: bir
+  istek 401 dönerse (ve bu isteğin kendisi zaten `/auth/refresh` değilse),
+  interceptor `AuthRepository.refresh()`'i senkron çağırıp (`runBlocking`)
+  yeni access token alır ve ORİJİNAL isteği bu token'la BİR KEZ tekrar
+  dener; yenileme başarısızsa orijinal 401 yanıtı olduğu gibi döner (sonsuz
+  döngü riski yok — tekrar denenen isteğin sonucu tekrar kontrol edilmiyor).
+- **Değişen dosyalar:** `data/network/AuthInterceptor.kt` (düzenlendi).
+- **Neden bu şekilde yapıldı:** `AuthInterceptor`, `OkHttpClient` kurulumunun
+  bir parçası; `AuthRepository` ise `AuthApiService` üzerinden AYNI
+  `Retrofit`/`OkHttpClient`'a bağımlı — bu yüzden `AuthRepository`'yi
+  doğrudan `@Inject constructor`'a almak dairesel bağımlılık (`OkHttpClient
+  -> AuthInterceptor -> AuthRepository -> AuthApiService -> Retrofit ->
+  OkHttpClient`) oluştururdu. Bunu kırmak için `dagger.Lazy<AuthRepository>`
+  kullanıldı (Dagger/Hilt'in bu tür döngüleri kırmak için standart deseni;
+  `Lazy<T>` sarmalayıcı, `OkHttpClient` inşa edilirken `AuthRepository`'yi
+  gerçekten OLUŞTURMAZ, yalnızca ilk `.get()` çağrısında — yani gerçekten
+  bir 401 geldiğinde — inşa eder). Eşzamanlı birden fazla isteğin aynı anda
+  401 alıp YARIŞ HALİNDE birbirini geçersiz kılan (backend'in refresh token
+  ROTATION + reuse-detection kuralı: aynı refresh token iki kez kullanılırsa
+  TÜM oturum zinciri iptal edilir) iki ayrı yenileme tetiklemesini önlemek
+  için `refreshAccessToken` fonksiyonu `@Synchronized` yapıldı ve kilide
+  girince önce `tokenStore.accessToken`'ın hâlâ "bayat" (401'e sebep olan)
+  token olup olmadığı kontrol ediliyor — başka bir istek zaten yenilemişse
+  gereksiz ikinci bir `/auth/refresh` çağrısı YAPILMIYOR, doğrudan güncel
+  token kullanılıyor.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` BUILD SUCCESSFUL
+  (Hilt/KSP dairesel bağımlılık hatası vermedi, `Lazy<AuthRepository>`
+  çözümü doğrulandı). `./gradlew :app:installDebug` ile emülatöre kuruldu
+  ve GERÇEK backend'e karşı canlı doğrulandı: süresi dolmuş bir token'la
+  `GET /vehicles` isteği atıldı, logcat'te tam beklenen zincir gözlendi —
+  `<-- 401` → otomatik `--> POST /auth/refresh` → `<-- 200` (yeni token
+  çifti) → orijinal istek yeni token'la tekrar denendi → `<-- 200` (20
+  araç döndü). Kullanıcı müdahalesi olmadan (yeniden giriş yapmadan) akış
+  kendiliğinden düzeldi.
+
+
+### 2026-07-17 — Rota izi hatası + Kilitle/Aç akışı + fotoğraf ekranında Vazgeç + yükleme göstergeleri (10 dosya, 4 batch)
+- **Ne yapıldı:** Kullanıcının test sırasında bulduğu dört ayrı eksik/hata
+  giderildi. **(A)** `RencarMap.kt`'deki noktalı rota çizgisi hiç
+  görünmüyordu; sebebi `lineDasharray(arrayOf(0f, 1.6f))` — 0 uzunluklu
+  tire segmenti MapLibre'de görünmez çizgi üretiyor; `arrayOf(1f, 1.6f)`
+  olarak düzeltildi. **(B)** Aktif Yolculuk ekranında "Kiralamayı Bitir"
+  artık `state.canFinish` (`isUnlocked && !isFinishing`) şartına bağlı —
+  Araç Detay ekranındaki Kilidi Aç → Rezerve Et deseniyle birebir aynı
+  mantıkla, önce "Kilitle / Aç"a basılması gerekiyor. **(C)** Araç Durumu
+  (4 foto) ekranındaki geri butonu artık sadece geri gitmiyor —
+  `DELETE /rentals/{id}` (`cancelRental`, yeni) ile arkadaki PREPARING
+  kiralamayı gerçekten iptal edip öyle çıkıyor; bu, kullanıcının canlı
+  testte yaşadığı "yarım bırakılmış kiralama tüm hesabı kilitliyor" (409
+  "Aktif bir kiralamanız varken rezervasyon yapamazsınız") tuzağını kalıcı
+  kapatıyor. **(F)** Rezervasyon Onayı ekranında araç bilgisi/ücret
+  yüklenirken artık boş/sıfır değerler yerine dönen bir gösterge + durum
+  metni gösteriliyor.
+- **Değişen dosyalar:** Batch A — `feature/maps/RencarMap.kt`. Batch B —
+  `feature/rental/active/ActiveRentalContract.kt` (`isUnlocked`, `canFinish`
+  eklendi), `ActiveRentalViewModel.kt`, `ActiveRentalScreen.kt`. Batch C —
+  `data/network/RentalsApiService.kt` (`DELETE rentals/{id}` eklendi),
+  `data/repository/RentalsRepository.kt` (`cancelRental` eklendi),
+  `feature/rental/photos/VehiclePhotosContract.kt` (`isCancelling`,
+  `canCancel` eklendi), `VehiclePhotosViewModel.kt` (`NavigateBack` artık
+  önce iptal ediyor), `VehiclePhotosScreen.kt`. Batch F —
+  `feature/rental/reservation/ReservationConfirmationScreen.kt`.
+- **Neden bu şekilde yapıldı:** (C) için "Vazgeç" ayrı bir buton/Intent
+  olarak eklenmedi — zaten var olan geri oku ve `NavigateBack`
+  Intent/Effect'i yeniden kullanıldı, çünkü bu ekrandan fotoğraf
+  tamamlanmadan çıkmanın TEK anlamlı sonucu kiralamayı iptal etmektir
+  (yarım kalan bir PREPARING kaydını sessizce arkada bırakmanın hiçbir
+  kullanım senaryosu yok, sadece hesabı kilitliyor). Ödeme adımı (kiralama
+  bitince cüzdan/kart ile ödeme) kullanıcıyla netleşen kararla bu kapsama
+  DAHİL EDİLMEDİ — ayrı, büyük bir özellik olarak bilinçli şekilde
+  ertelendi.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` (her batch
+  sonunda) ve `./gradlew :app:installDebug` BUILD SUCCESSFUL, emülatöre
+  kuruldu. Rota izinin gerçekten göründüğü, Kiralamayı Bitir'in Kilitle/
+  Aç'a kadar pasif kaldığı ve fotoğraf ekranından "Vazgeç" ile çıkınca
+  hesabın gerçekten temizlendiği bu oturumda kullanıcı tarafından henüz
+  TEST EDİLMEDİ.
+
+
+### 2026-07-17 — Ana ekrana "Aktif yolculuğunuz var" banner'ı eklendi (6 dosya, 2 batch)
+- **Ne yapıldı:** Kullanıcı canlı testte gerçek bir sorun buldu: Aktif
+  Yolculuk ekranından bir kez ayrılınca (örn. Ana ekrana dönünce) geri
+  dönmenin HİÇBİR yolu yoktu — sadece rezervasyon akışını yeni
+  tamamladığınızda oraya düşülüyordu. Bunu kapatmak için Ana ekran (Harita
+  sekmesi) artık açılışta `GET /rentals/active`'i kontrol ediyor; aktif bir
+  kiralama varsa arama çubuğunun altında "Aktif yolculuğunuz var — {marka}
+  {model} · Devam Et" banner'ı çıkıyor, tıklanınca doğrudan Aktif Yolculuk
+  ekranına gidiyor.
+- **Değişen dosyalar:** Batch 1 — `feature/maps/MapsContract.kt`
+  (`activeRentalId`, `activeRentalVehicleLabel` state alanları,
+  `ActiveRentalBannerClicked` Intent, `NavigateToActiveRental` Effect),
+  `MapsViewModel.kt` (`RentalsRepository` inject edildi, `loadActiveRental()`
+  eklendi), `MapsScreen.kt` (`ActiveRentalBanner` composable'ı eklendi),
+  `MapsRoute.kt` (`onNavigateToActiveRental` parametresi eklendi). Batch 2 —
+  `navigation/MainScaffold.kt`, `navigation/RenCarNavHost.kt` (parametre
+  zincirleme ile gerçek navigasyona bağlandı).
+- **Neden bu şekilde yapıldı:** Aktif kiralama kontrolü Splash'e değil Ana
+  ekrana eklendi — Splash zaten sadece token geçerliliğine bakıp Ana ekrana
+  yönlendiriyor (`docs/decisions.md`'deki mevcut sorumluluk ayrımını
+  bozmamak için); ayrıca kullanıcı bilinçli olarak "Ana ekrana banner
+  ekle" seçeneğini onayladı. `GET /rentals/active` 404 dönerse (aktif
+  kiralama yoksa, beklenen/normal durum) hata gösterilmeden sessizce yok
+  sayılıyor — bu her Ana ekran açılışında olağan bir durum, kullanıcıyı
+  gereksiz hata mesajıyla rahatsız etmemek için.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` (her iki batch
+  sonunda) ve `./gradlew :app:installDebug` BUILD SUCCESSFUL, emülatöre
+  kuruldu. Banner'ın gerçekten göründüğü ve tıklanınca doğru kiralamaya
+  götürdüğü bu oturumda kullanıcı tarafından henüz TEST EDİLMEDİ.
