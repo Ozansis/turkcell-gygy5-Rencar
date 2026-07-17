@@ -65,6 +65,19 @@ class RentalsRepository @Inject constructor(
         }
     }
 
+    suspend fun cancelRental(id: String): AuthResult<Unit> {
+        return try {
+            val response = rentalsApiService.cancelRental(id)
+            if (response.isSuccessful) {
+                AuthResult.Success(Unit)
+            } else {
+                AuthResult.Error(response.code(), "Sunucu hatası (kod: ${response.code()}).")
+            }
+        } catch (e: IOException) {
+            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
+        }
+    }
+
     suspend fun uploadPhoto(rentalId: String, side: String, imageUri: Uri): AuthResult<RentalPhotosStateDto> {
         return try {
             val sideBody = side.toRequestBody("text/plain".toMediaTypeOrNull())

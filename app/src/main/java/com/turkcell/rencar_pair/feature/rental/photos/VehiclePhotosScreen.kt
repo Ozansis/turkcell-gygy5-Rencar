@@ -52,9 +52,14 @@ fun VehiclePhotosScreen(
         ) {
             IconButton(
                 onClick = { onIntent(VehiclePhotosContract.Intent.NavigateBack) },
+                enabled = state.canCancel,
                 modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                if (state.isCancelling) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Vazgeç")
+                }
             }
         }
 
