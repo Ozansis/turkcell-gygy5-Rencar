@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -28,7 +30,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.turkcell.rencar_pair.feature.maps.GeoPoint
@@ -44,60 +45,73 @@ fun ActiveRentalScreen(
     onIntent: (ActiveRentalContract.Intent) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
-        val vehicleLocation = state.vehicleLocation
-        if (vehicleLocation != null) {
-            RencarMap(
-                myLocation = null,
-                vehicles = listOf(state.toMapVehicle(vehicleLocation)),
-                modifier = Modifier.fillMaxSize(),
-                initialCenter = vehicleLocation.toLatLng(),
-                initialZoom = 15.0
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
-        }
-
-        StatusPill(
-            label = state.statusLabel,
+    Column(modifier = modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 16.dp)
-        )
-
-        ActiveRentalSheet(
-            state = state,
-            onIntent = onIntent,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
-    }
-}
-
-@Composable
-private fun StatusPill(label: String, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(50),
-        tonalElevation = 4.dp,
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF43A047))
+            Text(text = "Aktif Yolculuk", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "Süre ve ücret canlı işliyor",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.width(8.dp))
-            Text(text = label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+
+            Spacer(Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.DirectionsCar, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(text = state.vehicleTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = state.vehicleSubtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
+
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            val vehicleLocation = state.vehicleLocation
+            if (vehicleLocation != null) {
+                RencarMap(
+                    myLocation = null,
+                    vehicles = listOf(state.toMapVehicle(vehicleLocation)),
+                    modifier = Modifier.fillMaxSize(),
+                    initialCenter = vehicleLocation.toLatLng(),
+                    initialZoom = 15.0,
+                    routePoints = state.routePoints
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+            }
+        }
+
+        ActiveRentalSheet(state = state, onIntent = onIntent)
     }
 }
 
@@ -138,6 +152,14 @@ private fun ActiveRentalSheet(
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold
             )
+            if (state.formattedStartedAt.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Başlangıç: ${state.formattedStartedAt}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             Spacer(Modifier.height(20.dp))
 
@@ -147,6 +169,30 @@ private fun ActiveRentalSheet(
             ) {
                 InfoCard(modifier = Modifier.weight(1f), label = "Anlık ücret", value = state.formattedCurrentCost)
                 InfoCard(modifier = Modifier.weight(1f), label = "Mesafe", value = state.formattedDistanceKm)
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .padding(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = state.formattedStartFeeNote,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             Spacer(Modifier.height(16.dp))
@@ -171,7 +217,7 @@ private fun ActiveRentalSheet(
                     modifier = Modifier
                         .weight(1f)
                         .height(52.dp),
-                    enabled = !state.isFinishing,
+                    enabled = state.canFinish,
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
@@ -218,7 +264,7 @@ private fun InfoCard(label: String, value: String, modifier: Modifier = Modifier
 
 private fun ActiveRentalContract.State.toMapVehicle(location: GeoPoint): NearbyVehicle = NearbyVehicle(
     id = vehicleId,
-    plate = "",
+    plate = plate,
     brand = brand,
     model = model,
     type = VehicleType.SEDAN,

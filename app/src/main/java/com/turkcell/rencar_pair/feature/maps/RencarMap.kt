@@ -27,11 +27,14 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import kotlin.math.roundToInt
 
@@ -39,11 +42,14 @@ val DEFAULT_CENTER: LatLng = LatLng(38.51740367746754, 27.161930350129918)
 
 private val ME_MARKER_COLOR = Color.parseColor("#4285F4")
 private val VEHICLE_MARKER_COLOR = Color.parseColor("#FB923C")
+private val ROUTE_LINE_COLOR = Color.parseColor("#4285F4")
 
 private const val VEHICLES_SOURCE_ID = "vehicles"
 private const val VEHICLE_CIRCLE_LAYER_ID = "vehicle-circle-layer"
 private const val VEHICLE_ICON_LAYER_ID = "vehicle-icon-layer"
 private const val VEHICLE_ICON_IMAGE_ID = "vehicle-car-icon"
+private const val ROUTE_SOURCE_ID = "route"
+private const val ROUTE_LINE_LAYER_ID = "route-line-layer"
 
 class RencarMapController internal constructor() {
     internal var map: MapLibreMap? = null
@@ -72,7 +78,8 @@ fun RencarMap(
     modifier: Modifier = Modifier,
     initialCenter: LatLng = DEFAULT_CENTER,
     initialZoom: Double = 10.0,
-    controller: RencarMapController? = null
+    controller: RencarMapController? = null,
+    routePoints: List<GeoPoint> = emptyList()
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -148,6 +155,19 @@ fun RencarMap(
                     )
                 )
 
+                loaded.addSource(GeoJsonSource(ROUTE_SOURCE_ID))
+                // Rota izi -> aracın birikmiş konum geçmişini noktalı çizgiyle gösterir.
+                loaded.addLayer(
+                    LineLayer(ROUTE_LINE_LAYER_ID, ROUTE_SOURCE_ID).withProperties(
+                        PropertyFactory.lineColor(ROUTE_LINE_COLOR),
+                        PropertyFactory.lineWidth(4f),
+                        PropertyFactory.lineOpacity(0.85f),
+                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                        PropertyFactory.lineDasharray(arrayOf(1f, 1.6f))
+                    )
+                )
+
                 loaded.addSource(GeoJsonSource(VEHICLES_SOURCE_ID))
                 // Dış halka -> araç konumunun etrafında yumuşak, yarı saydam bir halo (uzaktan da fark edilsin).
                 loaded.addLayer(
@@ -191,6 +211,12 @@ fun RencarMap(
     LaunchedEffect(mapAndStyle, vehicles) {
         val (_, style) = mapAndStyle ?: return@LaunchedEffect
         updateVehicles(style, vehicles)
+    }
+
+    // Rota izi -> routePoints her değiştiğinde (yeni konum biriktikçe) güncellenir.
+    LaunchedEffect(mapAndStyle, routePoints) {
+        val (_, style) = mapAndStyle ?: return@LaunchedEffect
+        updateRoute(style, routePoints)
     }
 
     // İlk açılışta kameranın tek seferlik konumlanması -> kullanıcı konumu geldiyse ona,
@@ -241,6 +267,16 @@ private fun updateVehicles(style: Style, vehicles: List<NearbyVehicle>) {
         )
     }
     source.setGeoJson(FeatureCollection.fromFeatures(features))
+}
+
+private fun updateRoute(style: Style, routePoints: List<GeoPoint>) {
+    val source = style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID) ?: return
+    if (routePoints.size < 2) {
+        source.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+        return
+    }
+    val line = LineString.fromLngLats(routePoints.map { Point.fromLngLat(it.longitude, it.latitude) })
+    source.setGeoJson(Feature.fromGeometry(line))
 }
 
 private fun GeoPoint.toLatLng(): LatLng = LatLng(latitude, longitude)

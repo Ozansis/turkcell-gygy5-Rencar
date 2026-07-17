@@ -25,6 +25,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 private const val POLL_INTERVAL_MS = 5000L
+private const val MAX_ROUTE_POINTS = 300
 
 @HiltViewModel(assistedFactory = ActiveRentalViewModel.Factory::class)
 class ActiveRentalViewModel @AssistedInject constructor(
@@ -81,6 +82,10 @@ class ActiveRentalViewModel @AssistedInject constructor(
                         vehicleId      = rental.vehicleId,
                         brand          = rental.vehicle.brand,
                         model          = rental.vehicle.model,
+                        plate          = rental.vehicle.plate,
+                        plan           = rental.plan,
+                        startFee       = rental.startFee,
+                        startedAtIso   = rental.startedAt,
                         elapsedSeconds = rental.elapsedSeconds.toLong(),
                         currentCost    = rental.currentCost,
                         distanceKm     = rental.distanceKm
@@ -106,10 +111,12 @@ class ActiveRentalViewModel @AssistedInject constructor(
             when (val result = vehiclesRepository.getVehicle(vehicleId)) {
                 is AuthResult.Success -> {
                     val vehicle = result.data
+                    val initialLocation = GeoPoint(vehicle.latitude, vehicle.longitude)
                     _state.update {
                         it.copy(
-                            vehicleLocation   = GeoPoint(vehicle.latitude, vehicle.longitude),
-                            vehiclePricePerDay = vehicle.pricePerDay
+                            vehicleLocation    = initialLocation,
+                            vehiclePricePerDay = vehicle.pricePerDay,
+                            routePoints        = it.routePoints + initialLocation
                         )
                     }
                 }
@@ -119,18 +126,26 @@ class ActiveRentalViewModel @AssistedInject constructor(
         viewModelScope.launch {
             vehicleLocationSocketClient.vehicleLocationUpdates().collect { update ->
                 if (update.vehicleId != vehicleId) return@collect
-                _state.update { it.copy(vehicleLocation = update.location) }
+                _state.update { current ->
+                    val nextPoints = if (current.routePoints.lastOrNull() == update.location) {
+                        current.routePoints
+                    } else {
+                        (current.routePoints + update.location).takeLast(MAX_ROUTE_POINTS)
+                    }
+                    current.copy(vehicleLocation = update.location, routePoints = nextPoints)
+                }
             }
         }
     }
 
     private fun handleLockUnlockClicked() {
-        sendEffect(ActiveRentalContract.Effect.ShowInfo("Bu özellik yakında eklenecek."))
+        _state.update { it.copy(isUnlocked = true) }
+        sendEffect(ActiveRentalContract.Effect.ShowInfo("Araç kilidi açıldı. Kiralamayı bitirebilirsiniz."))
     }
 
     private fun handleFinishRentalClicked() {
         val current = _state.value
-        if (current.rentalId.isBlank() || current.isFinishing) return
+        if (current.rentalId.isBlank() || !current.canFinish) return
         pollingJob?.cancel()
         _state.update { it.copy(isFinishing = true) }
         viewModelScope.launch {
