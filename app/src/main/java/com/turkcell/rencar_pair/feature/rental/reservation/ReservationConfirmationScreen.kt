@@ -168,6 +168,23 @@ private fun VehicleSummaryCard(state: ReservationConfirmationContract.State) {
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
+        if (state.isLoadingVehicle) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "Araç bilgileri yükleniyor...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            return@Surface
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -241,13 +258,25 @@ private fun FeeBreakdownCard(state: ReservationConfirmationContract.State) {
         Column(modifier = Modifier.padding(16.dp)) {
             FeeRow(label = "Ücretsiz rezervasyon", value = "15 dk")
             Spacer(Modifier.height(10.dp))
-            FeeRow(label = "Başlangıç ücreti", value = state.formattedStartFee)
-            Spacer(Modifier.height(10.dp))
-            FeeRow(
-                label = "Tahmini ücret (${state.previewMinutes} dk)",
-                value = state.formattedEstimatedTotal,
-                emphasize = true
-            )
+            if (state.isLoadingQuote) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.height(14.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Ücret hesaplanıyor...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                FeeRow(label = "Başlangıç ücreti", value = state.formattedStartFee)
+                Spacer(Modifier.height(10.dp))
+                FeeRow(
+                    label = "Tahmini ücret (${state.previewMinutes} dk)",
+                    value = state.formattedEstimatedTotal,
+                    emphasize = true
+                )
+            }
         }
     }
 }

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.turkcell.rencar_pair.data.network.dto.VehicleResponseDto
 import com.turkcell.rencar_pair.data.repository.AuthResult
+import com.turkcell.rencar_pair.data.repository.RentalsRepository
 import com.turkcell.rencar_pair.data.repository.VehiclesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -27,7 +28,8 @@ private const val HALF_TANK_THRESHOLD = 30.0
 
 @HiltViewModel
 class MapsViewModel @Inject constructor(
-    private val vehiclesRepository: VehiclesRepository
+    private val vehiclesRepository: VehiclesRepository,
+    private val rentalsRepository: RentalsRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MapsContract.State())
@@ -38,6 +40,7 @@ class MapsViewModel @Inject constructor(
 
     init {
         loadVehicles()
+        loadActiveRental()
     }
 
     fun onIntent(intent: MapsContract.Intent) {
@@ -49,7 +52,30 @@ class MapsViewModel @Inject constructor(
             is MapsContract.Intent.VehicleMarkerClicked    -> handleVehicleMarkerClicked(intent.vehicleId)
             MapsContract.Intent.RecenterClicked            -> sendEffect(MapsContract.Effect.RequestLocationRefresh)
             MapsContract.Intent.FindNearestClicked         -> handleFindNearestClicked()
+            MapsContract.Intent.ActiveRentalBannerClicked  -> handleActiveRentalBannerClicked()
         }
+    }
+
+    private fun loadActiveRental() {
+        viewModelScope.launch {
+            when (val result = rentalsRepository.getActiveRental()) {
+                is AuthResult.Success -> {
+                    val rental = result.data
+                    _state.update {
+                        it.copy(
+                            activeRentalId          = rental.id,
+                            activeRentalVehicleLabel = "${rental.vehicle.brand} ${rental.vehicle.model}"
+                        )
+                    }
+                }
+                is AuthResult.Error -> Unit // Aktif kiralama yoksa (404) sessizce yok say.
+            }
+        }
+    }
+
+    private fun handleActiveRentalBannerClicked() {
+        val rentalId = _state.value.activeRentalId ?: return
+        sendEffect(MapsContract.Effect.NavigateToActiveRental(rentalId))
     }
 
     private fun loadVehicles() {

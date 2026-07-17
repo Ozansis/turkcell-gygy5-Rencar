@@ -30,6 +30,7 @@ import org.maplibre.android.geometry.LatLng
 @Composable
 fun MapsRoute(
     onNavigateToVehicleDetail: (String, Int) -> Unit = { _, _ -> },
+    onNavigateToActiveRental: (String) -> Unit = {},
     onLocationPermissionStatusChanged: (Boolean) -> Unit = {},
     permissionRequestTrigger: Int = 0,
     viewModel: MapsViewModel = hiltViewModel()
@@ -116,6 +117,7 @@ fun MapsRoute(
                     }
                 }
                 is MapsContract.Effect.NavigateToVehicleDetail -> onNavigateToVehicleDetail(effect.vehicleId, effect.distanceMeters)
+                is MapsContract.Effect.NavigateToActiveRental  -> onNavigateToActiveRental(effect.rentalId)
                 MapsContract.Effect.ShowLocationPermissionDeniedMessage -> Unit
                 is MapsContract.Effect.ShowError -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
             }

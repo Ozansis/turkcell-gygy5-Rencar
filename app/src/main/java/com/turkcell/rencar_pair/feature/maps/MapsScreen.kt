@@ -58,9 +58,20 @@ fun MapsScreen(
             controller = mapController
         )
 
-        SearchBar(modifier = Modifier
-            .align(Alignment.TopCenter)
-            .padding(16.dp))
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SearchBar()
+            if (state.activeRentalId != null) {
+                ActiveRentalBanner(
+                    vehicleLabel = state.activeRentalVehicleLabel,
+                    onClick = { onIntent(MapsContract.Intent.ActiveRentalBannerClicked) }
+                )
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -141,6 +152,44 @@ private fun SearchBar(modifier: Modifier = Modifier) {
                 contentDescription = "Filtrele",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun ActiveRentalBanner(
+    vehicleLabel: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        tonalElevation = 4.dp,
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = "Aktif yolculuğunuz var",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    text = vehicleLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            Button(onClick = onClick, shape = RoundedCornerShape(10.dp)) {
+                Text("Devam Et")
+            }
         }
     }
 }

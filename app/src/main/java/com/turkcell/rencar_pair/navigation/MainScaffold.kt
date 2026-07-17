@@ -41,7 +41,8 @@ private val bottomNavItems = listOf(
 
 @Composable
 fun MainScaffold(
-    onNavigateToVehicleDetail: (String, Int) -> Unit = { _, _ -> }
+    onNavigateToVehicleDetail: (String, Int) -> Unit = { _, _ -> },
+    onNavigateToActiveRental: (String) -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -123,6 +124,7 @@ fun MainScaffold(
             composable(BottomNavItem.Map.route) {
                 MapsRoute(
                     onNavigateToVehicleDetail = onNavigateToVehicleDetail,
+                    onNavigateToActiveRental = onNavigateToActiveRental,
                     onLocationPermissionStatusChanged = { hasLocationPermission = it },
                     permissionRequestTrigger = permissionRequestTrigger
                 )

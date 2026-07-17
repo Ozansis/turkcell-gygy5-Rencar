@@ -19,10 +19,12 @@ object VehiclePhotosContract {
         val uploadingSide: PhotoSide? = null,
         val uploadedCount: Int = 0,
         val isStarting: Boolean = false,
-        val isLoading: Boolean = false
+        val isLoading: Boolean = false,
+        val isCancelling: Boolean = false
     ) {
         val photosComplete: Boolean get() = uploadedCount >= 4
         val canStart: Boolean get() = photosComplete && !isStarting
+        val canCancel: Boolean get() = !isStarting && !isCancelling
         val progressLabel: String get() = "$uploadedCount / 4 çekildi"
         val startButtonLabel: String get() = if (photosComplete) "Kiralamayı Başlat" else "Kiralamayı Başlat · ${4 - uploadedCount} foto kaldı"
 

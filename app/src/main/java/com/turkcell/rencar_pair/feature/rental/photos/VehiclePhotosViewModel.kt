@@ -49,7 +49,7 @@ class VehiclePhotosViewModel @AssistedInject constructor(
             is VehiclePhotosContract.Intent.CapturePhotoClicked -> sendEffect(VehiclePhotosContract.Effect.LaunchCamera(intent.side))
             is VehiclePhotosContract.Intent.PhotoCaptured        -> handlePhotoCaptured(intent.side, intent.uri)
             VehiclePhotosContract.Intent.StartRentalClicked      -> handleStartRentalClicked()
-            VehiclePhotosContract.Intent.NavigateBack            -> sendEffect(VehiclePhotosContract.Effect.NavigateBack)
+            VehiclePhotosContract.Intent.NavigateBack            -> handleNavigateBack()
         }
     }
 
@@ -101,6 +101,23 @@ class VehiclePhotosViewModel @AssistedInject constructor(
                 }
                 is AuthResult.Error -> {
                     _state.update { it.copy(isStarting = false) }
+                    sendEffect(VehiclePhotosContract.Effect.ShowError(result.message))
+                }
+            }
+        }
+    }
+
+    private fun handleNavigateBack() {
+        if (!_state.value.canCancel) return
+        _state.update { it.copy(isCancelling = true) }
+        viewModelScope.launch {
+            when (val result = rentalsRepository.cancelRental(rentalId)) {
+                is AuthResult.Success -> {
+                    _state.update { it.copy(isCancelling = false) }
+                    sendEffect(VehiclePhotosContract.Effect.NavigateBack)
+                }
+                is AuthResult.Error -> {
+                    _state.update { it.copy(isCancelling = false) }
                     sendEffect(VehiclePhotosContract.Effect.ShowError(result.message))
                 }
             }
