@@ -2046,3 +2046,41 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   içinde gelip kamerayı konuma kilitlediği, izin reddedilince hâlâ anında araçlara düşüldüğü ve
   VehicleDetail/ActiveRental mini-haritalarının davranışının değişmediği runtime'da
   DOĞRULANAMADI — bir sonraki oturumda cihazda/emülatörde test edilmeli.
+
+### 2026-07-18 — 8 ekranda status bar / gesture nav bar üzerine taşma düzeltildi (2 batch, 8 dosya)
+
+- **Ne yapıldı:** Kullanıcı "uygulama telefonun saat/bildirim kısmına ve alttaki oklara kayıyor,
+  dinamik olsun" diye bildirdi. `MainActivity.kt`'de `enableEdgeToEdge()` açık olduğundan içerik
+  varsayılan olarak tüm ekranın kenarına kadar çiziliyor; `Login/Register/Otp/Confirmation/
+  Selfie/License/Onboarding` ekranlarında zaten `.systemBarsPadding()` vardı ve `MainScaffold`
+  (Harita/Geçmiş/Cüzdan/Profil sekmeleri) Material3 `Scaffold`'un `innerPadding`'i sayesinde
+  güvenliydi, ama `RenCarNavHost.kt`'de `HOME`'un kardeşi olan 8 üst düzey rota hiç inset koruması
+  almıyordu. Explore agent ile tam liste çıkarıldı, ardından 2 batch'te (Agent.md §2.1 — tek
+  seferde 5 dosya sınırı) düzeltildi: (Batch 1, düz `Column(fillMaxSize())` kökü olan 5 ekran)
+  `SettingsScreen.kt`, `HistoryDetailScreen.kt`, `InviteScreen.kt`, `HelpScreen.kt`,
+  `ReservationConfirmationScreen.kt` — kök `Modifier`'a `.systemBarsPadding()` eklendi (mevcut
+  Login/Register deseniyle birebir aynı). (Batch 2) `VehiclePhotosScreen.kt` aynı basit desenle
+  düzeltildi; `VehicleDetailScreen.kt` ve `ActiveRentalScreen.kt` farklı ele alındı çünkü arka
+  planda tam ekran `RencarMap` var — kök'e `.systemBarsPadding()` eklemek haritayı da içeri
+  çekip istenmeyen bir kenar boşluğu bırakırdı. Bunun yerine yalnızca dokunulabilir kontrollere
+  (geri butonu -> `.statusBarsPadding()`, alttaki `VehicleDetailSheet`/`ActiveRentalSheet` ->
+  `.navigationBarsPadding()`) inset eklendi; haritanın kendisi kenara kadar uzanmaya devam ediyor.
+- **Değişen dosyalar:** `feature/settings/SettingsScreen.kt`, `feature/history/detail/
+  HistoryDetailScreen.kt`, `feature/invite/InviteScreen.kt`, `feature/help/HelpScreen.kt`,
+  `feature/rental/reservation/ReservationConfirmationScreen.kt`, `feature/rental/photos/
+  VehiclePhotosScreen.kt`, `feature/maps/detail/VehicleDetailScreen.kt`, `feature/rental/active/
+  ActiveRentalScreen.kt`.
+- **Neden bu şekilde yapıldı:** Sabit dp değeri yerine `systemBarsPadding()`/`statusBarsPadding()`/
+  `navigationBarsPadding()` kullanıldı çünkü bunlar Compose'un `WindowInsets` API'siyle cihazdan
+  cihaza (3 tuşlu navigasyon/gesture çubuğu, çentik/delik kamera, klavye açılışı vb.) otomatik
+  uyum sağlıyor — kullanıcının "dinamik olsun" talebi buydu. Harita arka planlı iki ekranda kök
+  yerine yalnızca kontrollere padding eklenmesi bilinçli bir tercih: haritanın edge-to-edge
+  görünümü tasarım gereği korunmalı, yalnızca üstündeki geri butonu ve alttaki eylem sheet'i
+  sistem çubuklarının altında/arkasında kalmamalı.
+- **Kendi kontrolüm:** Her iki batch'ten sonra `./gradlew :app:compileDebugKotlin` (2. batch'te
+  `--rerun` ile temiz derleme) çalıştırıldı, ikisinde de BUILD SUCCESSFUL; yalnızca projede
+  önceden var olan, bu değişikliklerle ilgisiz 3 uyarı. Bağlı emülatör/cihaz olmadığından
+  (`adb` bu ortamda kurulu değil) 8 ekranın da gerçek bir cihazda/emülatörde (özellikle gesture
+  navigasyonlu ve 3-tuşlu navigasyonlu cihazlarda, ayrıca çentikli ekranlarda) geri butonlarının
+  ve alt butonların artık sistem çubuklarıyla çakışmadığı GÖRSEL OLARAK DOĞRULANAMADI — bir
+  sonraki oturumda cihazda test edilmeli.
