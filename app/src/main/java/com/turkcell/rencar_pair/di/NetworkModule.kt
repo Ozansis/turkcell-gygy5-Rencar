@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import com.turkcell.rencar_pair.data.network.AuthApiService
 import com.turkcell.rencar_pair.data.network.AuthInterceptor
+import com.turkcell.rencar_pair.data.network.CardsApiService
 import com.turkcell.rencar_pair.data.network.LicenseApiService
 import com.turkcell.rencar_pair.data.network.RentalsApiService
 import com.turkcell.rencar_pair.data.network.ReservationsApiService
@@ -95,5 +96,11 @@ object NetworkModule {
     @Singleton
     fun provideWalletApiService(retrofit: Retrofit): WalletApiService {
         return retrofit.create(WalletApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideCardsApiService(retrofit: Retrofit): CardsApiService {
+        return retrofit.create(CardsApiService::class.java)
     }
 }

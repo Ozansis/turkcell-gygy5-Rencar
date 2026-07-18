@@ -2120,6 +2120,46 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   tag'i altında (`GET`/`POST /cards`, `PATCH /cards/{id}/default`,
   `DELETE /cards/{id}`) mevcut; bu batch'in konusu olmadığından sıradaki
   (Cards altyapı) batch'ine bırakıldı.
+
+### 2026-07-18 — Kayıtlı Kartlar (Cards) network/repository altyapısı kuruldu (4 dosya)
+
+- **Ne yapıldı:** Bir önceki Wallet altyapı batch'inde kapsam dışı
+  bırakılan `savedCards` alanının backend karşılığı olan `Cards` tag'i
+  (`GET /cards`, `POST /cards`, `PATCH /cards/{id}/default`,
+  `DELETE /cards/{id}`) için Wallet batch'iyle aynı desende Retrofit/Hilt
+  altyapısı kuruldu: `CardResponseDto`/`CreateCardDto`
+  (openapi.json'daki `Cards` şemasına birebir), `CardsApiService` (4 uç),
+  ve paylaşılan `AuthResult<T>` desenini kullanan `CardsRepository`
+  (`listCards()`, `addCard(brand, last4, expMonth, expYear)`,
+  `setDefaultCard(id)`, `deleteCard(id)`). `NetworkModule.kt`'ye
+  `provideCardsApiService` eklendi. `WalletViewModel`/`WalletScreen`
+  entegrasyonuna bilinçli olarak dokunulmadı — sonraki batch'in konusu.
+- **Değişen dosyalar (yeni):** `data/network/dto/CardDtos.kt`,
+  `data/network/CardsApiService.kt`, `data/repository/CardsRepository.kt`.
+  **Değişen dosya:** `di/NetworkModule.kt` (`provideCardsApiService`
+  eklendi).
+- **Neden bu şekilde yapıldı:** `CardResponseDto.brand`/`CreateCardDto.brand`
+  alanı, şemada kapalı bir enum (`VISA`/`MASTERCARD`) olmasına rağmen
+  Kotlin enum değil `String` tutuldu — projedeki yerleşik konvansiyonla
+  (`role`/`type`/`segment`/`status`/`transmission`/`WalletTransactionDto.type`)
+  tutarlılık ve backend ileride yeni bir marka (ör. TROY/AMEX) döndürürse
+  Gson deserialization'ının çökmesini önlemek için (kullanıcı onayıyla
+  karar verildi, gerekçe planda sunuldu). `expMonth`/`expYear` şemada
+  `"type": "number"` olsa da `VehicleResponseDto.seats` emsaliyle tutarlı
+  olarak `Int` tutuldu (tam sayı anlamına gelen alanlar, parasal değil).
+  `deleteCard()`, `RentalsRepository.cancelRental()` ile BİREBİR aynı
+  desende `AuthResult<Unit>` döndürüyor — `DELETE /cards/{id}` 204 No
+  Content döndüğünden gövde kontrolü yapılmadan yalnızca
+  `response.isSuccessful` kontrol ediliyor (`CardsApiService.deleteCard`
+  de aynı nedenle `Response<Unit>` imzasını kullanıyor, projede zaten
+  `RentalsApiService.cancelRental`'da mevcut bir emsal). `CreateCardDto`'da
+  kullanıcının açık talimatıyla tam kart numarası/CVV alanı KESİNLİKLE
+  YOK — yalnızca `brand`/`last4`/`expMonth`/`expYear` (backend zaten bunu
+  400 ile reddediyor, PCI uyumluluğu).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Yeni dosyalar henüz hiçbir ViewModel'den çağrılmadığından
+  runtime/network testi yapılmadı (Wallet altyapı batch'iyle tutarlı olarak
+  sonraki batch'e bırakıldı).
 - **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
   BUILD SUCCESSFUL. Yeni dosyalar henüz hiçbir ViewModel'den çağrılmadığından
   runtime/network testi yapılmadı (Auth/Vehicles altyapı batch'leriyle
