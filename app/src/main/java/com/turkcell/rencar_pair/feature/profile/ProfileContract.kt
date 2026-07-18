@@ -2,9 +2,12 @@ package com.turkcell.rencar_pair.feature.profile
 
 object ProfileContract {
 
+    const val COMING_SOON_MESSAGE = "Bu özellik yakında eklenecek"
+
     data class State(
         val userName: String = "",
         val phoneNumber: String = "",
+        val referralCode: String? = null,
         val license: LicenseVerification? = null,
         val isLoading: Boolean = false,
         val errorMessage: String? = null
@@ -20,12 +23,11 @@ object ProfileContract {
     }
 
     sealed interface Effect {
-        data object NavigateToEditProfile      : Effect
-        data object NavigateToPaymentMethods   : Effect
-        data object NavigateToSettings         : Effect
-        data object NavigateToHelp             : Effect
-        data object NavigateToInvite           : Effect
-        data object NavigateToLogin            : Effect
+        data object NavigateToSettings                        : Effect
+        data object NavigateToHelp                             : Effect
+        data class NavigateToInvite(val referralCode: String) : Effect
+        data object NavigateToLogin                            : Effect
+        data class ShowToast(val message: String)              : Effect
     }
 }
 

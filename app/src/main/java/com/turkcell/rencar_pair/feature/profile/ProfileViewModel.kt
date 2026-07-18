@@ -35,13 +35,22 @@ class ProfileViewModel @Inject constructor(
 
     fun onIntent(intent: ProfileContract.Intent) {
         when (intent) {
-            ProfileContract.Intent.EditProfileClicked    -> sendEffect(ProfileContract.Effect.NavigateToEditProfile)
-            ProfileContract.Intent.PaymentMethodsClicked -> sendEffect(ProfileContract.Effect.NavigateToPaymentMethods)
+            ProfileContract.Intent.EditProfileClicked    -> handleComingSoonClicked()
+            ProfileContract.Intent.PaymentMethodsClicked -> handleComingSoonClicked()
             ProfileContract.Intent.SettingsClicked       -> sendEffect(ProfileContract.Effect.NavigateToSettings)
             ProfileContract.Intent.HelpClicked           -> sendEffect(ProfileContract.Effect.NavigateToHelp)
-            ProfileContract.Intent.InviteClicked         -> sendEffect(ProfileContract.Effect.NavigateToInvite)
+            ProfileContract.Intent.InviteClicked         -> handleInviteClicked()
             ProfileContract.Intent.SignOutClicked        -> handleSignOutClicked()
         }
+    }
+
+    private fun handleComingSoonClicked() {
+        sendEffect(ProfileContract.Effect.ShowToast(ProfileContract.COMING_SOON_MESSAGE))
+    }
+
+    private fun handleInviteClicked() {
+        val referralCode = _state.value.referralCode ?: return
+        sendEffect(ProfileContract.Effect.NavigateToInvite(referralCode))
     }
 
     private fun handleSignOutClicked() {
@@ -58,9 +67,10 @@ class ProfileViewModel @Inject constructor(
                 is AuthResult.Success -> {
                     _state.update {
                         it.copy(
-                            isLoading   = false,
-                            userName    = result.data.fullName,
-                            phoneNumber = result.data.phone ?: ""
+                            isLoading    = false,
+                            userName     = result.data.fullName,
+                            phoneNumber  = result.data.phone ?: "",
+                            referralCode = result.data.referralCode
                         )
                     }
                     loadLicenseStatus()
