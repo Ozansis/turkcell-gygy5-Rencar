@@ -16,12 +16,15 @@ import com.turkcell.rencar_pair.feature.auth.login.LoginRoute
 import com.turkcell.rencar_pair.feature.auth.otp.OtpRoute
 import com.turkcell.rencar_pair.feature.auth.register.RegisterRoute
 import com.turkcell.rencar_pair.feature.auth.selfie.SelfieRoute
+import com.turkcell.rencar_pair.feature.help.HelpRoute
 import com.turkcell.rencar_pair.feature.history.detail.HistoryDetailRoute
+import com.turkcell.rencar_pair.feature.invite.InviteRoute
 import com.turkcell.rencar_pair.feature.maps.detail.VehicleDetailRoute
 import com.turkcell.rencar_pair.feature.onboarding.OnboardingRoute
 import com.turkcell.rencar_pair.feature.rental.active.ActiveRentalRoute
 import com.turkcell.rencar_pair.feature.rental.photos.VehiclePhotosRoute
 import com.turkcell.rencar_pair.feature.rental.reservation.ReservationConfirmationRoute
+import com.turkcell.rencar_pair.feature.settings.SettingsRoute
 import com.turkcell.rencar_pair.feature.splash.SplashRoute
 
 private object RenCarDestinations {
@@ -40,6 +43,9 @@ private object RenCarDestinations {
     const val RENTAL_ACTIVE = "rental-active/{rentalId}"
     const val VEHICLE_PHOTOS = "vehicle-photos/{rentalId}/{vehicleId}"
     const val HISTORY_DETAIL = "history-detail/{rentalId}"
+    const val SETTINGS = "settings"
+    const val HELP = "help"
+    const val INVITE = "invite/{referralCode}"
 
     fun otpRoute(phoneNumber: String) = "otp/$phoneNumber"
     fun vehicleDetailRoute(vehicleId: String, distanceMeters: Int) = "vehicle-detail/$vehicleId/$distanceMeters"
@@ -47,6 +53,7 @@ private object RenCarDestinations {
     fun rentalActiveRoute(rentalId: String) = "rental-active/$rentalId"
     fun vehiclePhotosRoute(rentalId: String, vehicleId: String) = "vehicle-photos/$rentalId/$vehicleId"
     fun historyDetailRoute(rentalId: String) = "history-detail/$rentalId"
+    fun inviteRoute(referralCode: String) = "invite/$referralCode"
 }
 
 @Composable
@@ -216,11 +223,39 @@ fun RenCarNavHost() {
                 onNavigateToHistoryDetail = { rentalId ->
                     navController.navigate(RenCarDestinations.historyDetailRoute(rentalId))
                 },
+                onNavigateToSettings = {
+                    navController.navigate(RenCarDestinations.SETTINGS)
+                },
+                onNavigateToHelp = {
+                    navController.navigate(RenCarDestinations.HELP)
+                },
+                onNavigateToInvite = { referralCode ->
+                    navController.navigate(RenCarDestinations.inviteRoute(referralCode))
+                },
                 onNavigateToLogin = {
                     navController.navigate(RenCarDestinations.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
                 }
+            )
+        }
+
+        composable(RenCarDestinations.SETTINGS) {
+            SettingsRoute(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(RenCarDestinations.HELP) {
+            HelpRoute(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(
+            route     = RenCarDestinations.INVITE,
+            arguments = listOf(navArgument("referralCode") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val referralCode = backStackEntry.arguments?.getString("referralCode").orEmpty()
+            InviteRoute(
+                referralCode   = referralCode,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

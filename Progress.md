@@ -1674,3 +1674,144 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   deprecated `Icons.Filled.List`). Bağlı bir emülatör/cihaz olmadığından (`adb devices`
   boş döndü) runtime testi (gerçek CUSTOMER hesabıyla Profil'de gerçek ad/telefonun ve
   doğru ehliyet durumunun görünmesi, hata senaryosu) HENÜZ YAPILMADI.
+
+### 2026-07-18 — Profil dead-end butonları: Batch 1 — Ayarlar ekranı (tema tercihi, DataStore) izole kuruldu (5 dosya)
+
+- **Ne yapıldı:** Profil ekranındaki 5 kalan dead-end butondan (Profili Düzenle/Ödeme
+  Yöntemleri/Ayarlar/Yardım/Davet Et) "Ayarlar"ı gerçek hale getirmenin ilk alt-batch'i
+  uygulandı. `OnboardingPreferences.kt` ile aynı DataStore Preferences deseninde yeni
+  `ThemePreferences.kt` eklendi: `enum class ThemeMode { SYSTEM, LIGHT, DARK }` ve
+  `Flow<ThemeMode>` (`OnboardingPreferences`'ın tek seferlik `suspend fun`
+  okumasından farklı olarak reaktif — tema değişince tüm uygulamaya anında yansıması
+  gerektiğinden). Ardından `feature/settings/` paketi sıfırdan MVI dörtlüsü olarak
+  kuruldu: `SettingsContract.kt` (State: `themeMode`; Intent:
+  `ThemeModeSelected`/`NavigateBack`; Effect: `NavigateBack`), `SettingsViewModel.kt`
+  (`@HiltViewModel` + `ThemePreferences` inject, `init` içinde `themeMode` flow'unu
+  dinleyip state'i günceller — DataStore tek doğruluk kaynağı, seçim yapıldığında
+  state doğrudan değil DataStore'un yeni emit'i üzerinden güncellenir),
+  `SettingsScreen.kt` (`HistoryDetailScreen.kt`'deki geri butonlu üst bar deseni +
+  `ProfileScreen.kt`'deki `MenuRow` diline benzer, seçili satırda check ikonu gösteren
+  3 satırlık tema kartı), `SettingsRoute.kt` (`HistoryDetailRoute.kt` iskeletiyle
+  birebir aynı, parametresiz `hiltViewModel()`).
+- **Değişen/yeni dosyalar:** `data/local/ThemePreferences.kt` (yeni),
+  `feature/settings/SettingsContract.kt` (yeni), `SettingsViewModel.kt` (yeni),
+  `SettingsScreen.kt` (yeni), `SettingsRoute.kt` (yeni).
+- **Neden bu şekilde yapıldı:** Kullanıcı onayıyla netleşen karar: Ayarlar ekranı için
+  dil seçimi değil tema tercihi (Sistem/Açık/Koyu) seçildi — dil desteği ayrı bir i18n
+  altyapısı gerektirdiğinden kapsam dışı, tema tercihi tek bir DataStore anahtarıyla
+  çözülebilen gerçek bir ayar. `ThemeMode` bilinçli olarak gerçek bir Kotlin `enum`
+  (projenin API DTO'larında "role"/"status" gibi alanlar için benimsediği "enum yerine
+  String" kuralının aksine) — çünkü bu backend'den gelen bir veri değil, tamamen yerel
+  ve kapalı bir küme, deserialization riski yok. Bu batch bilinçli olarak İZOLE
+  bırakıldı: `MainActivity.kt` (tema akışını `RenCarPairTheme`'e bağlama),
+  `RenCarNavHost.kt`/`MainScaffold.kt`/`ProfileRoute.kt` (navigasyon bağlama) bu
+  batch'te DEĞİŞTİRİLMEDİ — Register/HistoryDetail ekranlarındaki "önce izole MVI
+  dörtlüsü, sonra ayrı bir alt-batch'te navigasyon bağlama" emsaline tutarlı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi; ilk denemede
+  `SettingsScreen.kt`'de `Spacer(Modifier.height(8.dp))` için eksik
+  `androidx.compose.foundation.layout.height` import'u derleme hatası verdi, eklenip
+  düzeltildi. Sonrasında BUILD SUCCESSFUL, uyarı yok. `SettingsRoute` henüz hiçbir
+  yerden çağrılmadığından runtime testi bilinçli olarak sonraki (navigasyon bağlama)
+  batch'ine bırakıldı.
+
+### 2026-07-18 — Profil dead-end butonları: Batch 4-5 — Ayarlar/Yardım/Davet Et navigasyona bağlandı, tema uygulandı, "Yakında" Toast'ı eklendi (6 dosya, tek onayla iki alt-batch, uçtan uca doğrulandı)
+
+- **Ne yapıldı:** Görevin son iki alt-batch'i tek onayla ardışık uygulandı ve gerçek
+  emülatörde uçtan uca test edildi.
+  **Batch 4 (Contract/ViewModel):** `ProfileContract.kt`'ye `referralCode: String?` State
+  alanı ve `const val COMING_SOON_MESSAGE` eklendi; `NavigateToEditProfile`/
+  `NavigateToPaymentMethods` Effect'leri tamamen kaldırıldı (artık hiçbir yere
+  navigate etmiyorlar), `NavigateToInvite` `data object`'ten
+  `data class NavigateToInvite(val referralCode: String)`'e çevrildi, yeni
+  `ShowToast(val message: String)` Effect'i eklendi. `ProfileViewModel.kt`:
+  `EditProfileClicked`/`PaymentMethodsClicked` artık ortak `handleComingSoonClicked()`
+  ile `ShowToast`'a bağlanıyor; yeni `handleInviteClicked()` guard clause ile
+  (`referralCode == null` ise sessizce no-op) `NavigateToInvite(referralCode)`
+  gönderiyor; `loadProfile()` artık `result.data.referralCode`'u State'e yazıyor.
+  **Batch 5 (navigasyon bağlama):** `ProfileRoute.kt` yeni effect'leri tüketiyor
+  (`ShowToast` → `Toast.makeText`, `NavigateToInvite` → `onNavigateToInvite(code)`).
+  `MainScaffold.kt`'ye üç yeni parametre (`onNavigateToSettings`/`onNavigateToHelp`/
+  `onNavigateToInvite`) eklenip `ProfileRoute`'a aktarıldı. `RenCarNavHost.kt`'ye
+  `SETTINGS`/`HELP`/`INVITE = "invite/{referralCode}"` rotaları + üç yeni `composable`
+  bloğu eklendi (`HOME` bloğundaki `MainScaffold` çağrısına üç yeni callback bağlandı).
+  `MainActivity.kt` artık `ThemePreferences`'ı Hilt field injection ile alıyor,
+  `themeMode.collectAsState(initial = ThemeMode.SYSTEM)` ile dinleyip
+  `RenCarPairTheme(darkTheme = ...)`'e besliyor (SYSTEM → `isSystemInDarkTheme()`,
+  LIGHT → `false`, DARK → `true`).
+- **Değişen dosyalar:** `feature/profile/ProfileContract.kt`, `ProfileViewModel.kt`,
+  `ProfileRoute.kt`, `navigation/MainScaffold.kt`, `navigation/RenCarNavHost.kt`,
+  `MainActivity.kt`.
+- **Neden bu şekilde yapıldı:** `NavigateToEditProfile`/`NavigateToPaymentMethods`
+  Effect'lerinin tamamen silinmesi (Route'ta `-> Unit` olarak bırakılmak yerine)
+  bilinçli bir tercih: artık gerçekten hiçbir navigasyona karşılık gelmiyorlar, ölü
+  Effect dalları bırakmak yerine kaynağında kaldırıldı. `handleInviteClicked()`'daki
+  guard clause (mvi-viewmodel-rules.md §5 örneğiyle birebir aynı desen), kullanıcı
+  Profil yüklenmeden/hata sonrası `referralCode` `null` iken Davet Et'e basarsa
+  ekranın boş bir kodla açılmasını engelliyor — İzole batch'te (Batch 3) not edilen
+  riskin kaynağında kapatılması. `MainActivity`'nin `ThemePreferences`'ı doğrudan field
+  injection ile alması (ayrı bir ViewModel yerine) bilinçli: tema, herhangi bir tek
+  ekranın Contract'ına ait değil, tüm `NavHost`'u saran kök bir uygulama durumu —
+  decisions.md'nin "Nav-Graph-Scoped Paylaşılan State MVI Contract Kullanmaz" kararıyla
+  ruh olarak aynı gerekçe (LicenseFlowViewModel emsali).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` — BUILD SUCCESSFUL, ilk
+  denemede geçti (ara derleme yapılamadı çünkü Batch 4, zaten bağlı olan
+  `ProfileRoute.kt`'nin exhaustive `when`'ini kırıyordu — Settings/Help/Invite'ın
+  izole ilk alt-batch'lerinden farklı olarak Profile MVI dörtlüsü baştan beri
+  navigasyona bağlıydı). `./gradlew :app:installDebug` ile bağlı emülatöre
+  (`emulator-5554`) kuruldu ve CANLI BACKEND'E KARŞI UÇTAN UCA doğrulandı:
+  Profil ekranı gerçek kullanıcı verisiyle açıldı → **Ayarlar**: "Koyu" seçilince
+  tüm uygulama ANINDA koyu temaya geçti (ekran görüntüsüyle doğrulandı), geri
+  dönüldüğünde tema kalıcı kaldı; → **Yardım & Destek**: 5 SSS + iletişim kartı
+  doğru göründü, geri tuşu çalıştı; → **Davet Et**: gerçek referans kodu
+  (`REN-6F9AWV`, `GET /auth/me`'den) görüntülendi, "Davet kodunu paylaş"a
+  basılınca Android'in gerçek paylaşım penceresi doğru metinle
+  (`"RenCar'a katıl, referans kodumla kaydolduğunda ikimiz de kazanıyoruz:
+  REN-6F9AWV"`) açıldı; → **Profili Düzenle** (kalem ikonu) ve **Ödeme yöntemleri**
+  ikisi de "Bu özellik yakında eklenecek" Toast'ını gösterdi, dead-end kalmadı.
+  `adb logcat -d -t 500 *:E` ile crash/exception taraması yapıldı, uygulamayla
+  ilgili hiçbir hata bulunmadı. Bu, görevin TÜM maddelerinin (Ayarlar/Yardım/
+  Davet Et gerçek hale getirme + Profili Düzenle/Ödeme Yöntemleri "Yakında"
+  bağlanması) tamamlandığı ve gerçek cihazda uçtan uca doğrulandığı anlamına gelir.
+
+### 2026-07-18 — Profil dead-end butonları: Batch 2 — Yardım ekranı (statik SSS) ve Batch 3 — Davet Et ekranı (referans kodu paylaşımı) izole kuruldu (8 dosya, tek onayla iki alt-batch)
+
+- **Ne yapıldı:** Kullanıcının "tek onayla ilerle" talimatıyla, bağımsız iki izole MVI
+  dörtlüsü art arda uygulandı.
+  **Yardım:** `feature/help/` paketi kuruldu — `HelpContract.kt` (dosya seviyesinde
+  `data class FaqEntry(question, answer)` ve 5 adet sabit SSS girdisi + destek
+  e-posta/telefonu içeren `State`; `Intent`/`Effect` yalnızca `NavigateBack`),
+  `HelpViewModel.kt` (parametresiz `@HiltViewModel`, veri zaten `State` varsayılanında
+  sabit olduğundan `init`/yükleme fonksiyonu yok), `HelpScreen.kt` (geri butonlu üst bar +
+  SSS kartları + iletişim kartı, tamamen statik, expand/collapse gibi ekstra state
+  eklenmedi), `HelpRoute.kt` (`HistoryDetailRoute.kt` iskeletiyle aynı).
+  **Davet Et:** `feature/invite/` paketi kuruldu — `InviteContract.kt` (State:
+  `referralCode`; Intent: `ShareClicked`/`NavigateBack`; Effect:
+  `ShareReferralCode(referralCode)`/`NavigateBack`), `InviteViewModel.kt`
+  (`HistoryDetailViewModel.kt`'deki BİREBİR AYNI `@HiltViewModel(assistedFactory=...)` +
+  `@AssistedInject @Assisted referralCode: String` deseni — kendi API çağrısı YOK,
+  referans kodu constructor parametresi olarak alınıp doğrudan `State`'e konuyor),
+  `InviteScreen.kt` (kod kartı + "Davet kodunu paylaş" butonu, `referralCode` boşsa
+  buton disabled), `InviteRoute.kt` (`ShareReferralCode` effect'i `LocalContext.current`
+  ile gerçek bir `Intent.ACTION_SEND` + `Intent.createChooser` açıyor — Android'in
+  yerleşik paylaşım penceresi).
+- **Değişen/yeni dosyalar:** `feature/help/HelpContract.kt`, `HelpViewModel.kt`,
+  `HelpScreen.kt`, `HelpRoute.kt` (hepsi yeni); `feature/invite/InviteContract.kt`,
+  `InviteViewModel.kt`, `InviteScreen.kt`, `InviteRoute.kt` (hepsi yeni).
+- **Neden bu şekilde yapıldı:** Davet Et ekranının referans kodunu kendi API çağrısıyla
+  ÇEKMEMESİ bilinçli bir tasarım kararı: `GET /auth/me` zaten Profil ekranında bir önceki
+  batch'te çekiliyor (`UserResponseDto.referralCode`), görev açıkça "yeni bir API çağrısı
+  gerekmiyor" dediğinden, kod `VehicleDetail`'deki `distanceMeters` emsaliyle aynı şekilde
+  (tek seferlik hesaplanmış bir değerin nav path segmenti olarak taşınması) Profil'den
+  Invite'a bir rota parametresi olarak aktarılacak — bu bağlantı henüz kurulmadı (Batch 4-5).
+  Paylaşım penceresinin (`Intent.ACTION_SEND`) Screen değil Route içinde açılması,
+  `VehicleDetailRoute`'un konum izni kontrolünü Route'ta yapması emsaliyle tutarlı: Screen
+  hiçbir zaman platforma özgü/Context gerektiren bir çağrı yapmaz, bunun yerine ViewModel
+  bir Effect gönderir, Route bu Effect'i tüketip gerçek sistem çağrısını yapar. Yardım
+  ekranında SSS içeriği genişletilebilir (accordion) yapılmadı — görevde "basit bir ekran
+  yeterli" denildiğinden gereksiz bir UI-state eklemek kapsam dışı aşırı mühendislik olurdu.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile iki kez derlendi (8 dosya
+  eklendikten sonra ve küçük bir temizlik sonrası — `InviteScreen.kt`'de `Icon`'a
+  gereksiz boş `modifier = Modifier` parametresi verilmişti, kaldırıldı), ikisinde de
+  BUILD SUCCESSFUL, uyarı yok. `HelpRoute`/`InviteRoute` henüz hiçbir yerden
+  çağrılmadığından (izole) runtime testi bilinçli olarak navigasyon bağlama batch'ine
+  bırakıldı.
