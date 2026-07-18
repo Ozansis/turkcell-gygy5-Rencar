@@ -8,6 +8,7 @@ import com.turkcell.rencar_pair.data.network.LicenseApiService
 import com.turkcell.rencar_pair.data.network.RentalsApiService
 import com.turkcell.rencar_pair.data.network.ReservationsApiService
 import com.turkcell.rencar_pair.data.network.VehiclesApiService
+import com.turkcell.rencar_pair.data.network.WalletApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -88,5 +89,11 @@ object NetworkModule {
     @Singleton
     fun provideRentalsApiService(retrofit: Retrofit): RentalsApiService {
         return retrofit.create(RentalsApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideWalletApiService(retrofit: Retrofit): WalletApiService {
+        return retrofit.create(WalletApiService::class.java)
     }
 }

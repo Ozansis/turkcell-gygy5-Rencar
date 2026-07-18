@@ -2084,3 +2084,43 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   navigasyonlu ve 3-tuşlu navigasyonlu cihazlarda, ayrıca çentikli ekranlarda) geri butonlarının
   ve alt butonların artık sistem çubuklarıyla çakışmadığı GÖRSEL OLARAK DOĞRULANAMADI — bir
   sonraki oturumda cihazda test edilmeli.
+
+### 2026-07-18 — Cüzdan (Wallet) network/repository altyapısı kuruldu (4 dosya)
+
+- **Ne yapıldı:** Cüzdan ekranı için (o ana kadar tamamen `WalletMockSource`
+  ile beslenen mock bir ekrandı) `GET /wallet` ve `POST /wallet/topup`
+  uçlarına bağlanacak Retrofit/Hilt altyapısı sıfırdan kuruldu:
+  `WalletResponseDto`/`WalletTransactionDto`/`TopupDto` (openapi.json'daki
+  `Wallet` tag'i şemasına birebir), `WalletApiService` (GET wallet, POST
+  wallet/topup), ve `AuthRepository.kt`'deki paylaşılan `AuthResult<T>` +
+  `extractErrorMessage()` desenini yeniden kullanan `WalletRepository`
+  (`getWallet()`, `topup(amount)`). `NetworkModule.kt`'ye
+  `provideWalletApiService` eklendi. `WalletViewModel`/`WalletRoute`/
+  `WalletScreen`/`WalletMockSource`'a bilinçli olarak dokunulmadı — ekran
+  hâlâ mock veriyle çalışıyor, bu batch sadece altyapı.
+- **Değişen dosyalar (yeni):** `data/network/dto/WalletDtos.kt`,
+  `data/network/WalletApiService.kt`, `data/repository/WalletRepository.kt`.
+  **Değişen dosya:** `di/NetworkModule.kt` (`provideWalletApiService`
+  eklendi).
+- **Neden bu şekilde yapıldı:** `WalletTransactionDto.type` alanı (`TOPUP`/
+  `RENTAL_PAYMENT`/`REFERRAL_BONUS`), projedeki yerleşik kararla tutarlı
+  olarak Kotlin enum değil `String` tutuldu (bkz. `role`/`type`/`segment`/
+  `status` için aynı gerekçe — backend yeni bir değer dönerse Gson
+  deserialization'ının patlamasını önlemek için). `rentalId` alanı ham
+  şemada `"type": "object", "nullable": true` olarak tanımlıydı (açıklaması
+  "ilgili kiralamanın id'si" olmasına rağmen) — Agent.md §2.2 (uydurma
+  yasağı) gereği bu belirsizlik kullanıcıya soruldu, kullanıcı onayıyla
+  `String?` olarak tiplendi. `POST /wallet/topup` başarı kodu şemada 200
+  değil 201 — `Response.isSuccessful` tüm 2xx'i kapsadığından
+  `WalletRepository`'de ekstra bir ayrıma gerek duyulmadı. `topup()`
+  fonksiyonu ayrıca bir `getWallet()` çağrısı yapmıyor çünkü backend zaten
+  güncel `WalletResponseDto`'yu (bakiye + işlemler) topup cevabında
+  döndürüyor. Kayıtlı kart (`savedCards`) alanı kapsam dışı bırakıldı —
+  backend'de bu alanın karşılığı `Wallet` tag'i DEĞİL, ayrı bir `Cards`
+  tag'i altında (`GET`/`POST /cards`, `PATCH /cards/{id}/default`,
+  `DELETE /cards/{id}`) mevcut; bu batch'in konusu olmadığından sıradaki
+  (Cards altyapı) batch'ine bırakıldı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Yeni dosyalar henüz hiçbir ViewModel'den çağrılmadığından
+  runtime/network testi yapılmadı (Auth/Vehicles altyapı batch'leriyle
+  tutarlı olarak sonraki batch'e bırakıldı).
