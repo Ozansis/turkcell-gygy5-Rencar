@@ -4,7 +4,8 @@ object HistoryContract {
 
     data class State(
         val rentals: List<RentalRecord> = emptyList(),
-        val isLoading: Boolean = false
+        val isLoading: Boolean = false,
+        val errorMessage: String? = null
     ) {
         val monthlyTripCount: Int get() = rentals.size
         val monthlySpending: Double get() = rentals.sumOf { it.totalPrice }

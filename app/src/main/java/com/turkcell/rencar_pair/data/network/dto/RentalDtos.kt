@@ -49,6 +49,14 @@ data class RentalPhotosStateDto(
     val photosComplete: Boolean
 )
 
+data class RentalStatsResponseDto(
+    val month: String,
+    val tripCount: Double,
+    val totalSpent: Double,
+    val totalMinutes: Double,
+    val totalKm: Double
+)
+
 data class ActiveRentalResponseDto(
     val id: String,
     val userId: String,

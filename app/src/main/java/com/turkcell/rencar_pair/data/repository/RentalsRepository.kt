@@ -7,6 +7,7 @@ import com.turkcell.rencar_pair.data.network.dto.ActiveRentalResponseDto
 import com.turkcell.rencar_pair.data.network.dto.CreateRentalDto
 import com.turkcell.rencar_pair.data.network.dto.RentalPhotosStateDto
 import com.turkcell.rencar_pair.data.network.dto.RentalResponseDto
+import com.turkcell.rencar_pair.data.network.dto.RentalStatsResponseDto
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.IOException
 import javax.inject.Inject
@@ -26,6 +27,48 @@ class RentalsRepository @Inject constructor(
     suspend fun createRental(vehicleId: String, plan: String, endDate: String? = null): AuthResult<RentalResponseDto> {
         return try {
             val response = rentalsApiService.createRental(CreateRentalDto(vehicleId, plan, endDate))
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                AuthResult.Success(body)
+            } else {
+                AuthResult.Error(response.code(), "Sunucu hatası (kod: ${response.code()}).")
+            }
+        } catch (e: IOException) {
+            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
+        }
+    }
+
+    suspend fun listMine(): AuthResult<List<RentalResponseDto>> {
+        return try {
+            val response = rentalsApiService.listMine()
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                AuthResult.Success(body)
+            } else {
+                AuthResult.Error(response.code(), "Sunucu hatası (kod: ${response.code()}).")
+            }
+        } catch (e: IOException) {
+            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
+        }
+    }
+
+    suspend fun getRental(id: String): AuthResult<RentalResponseDto> {
+        return try {
+            val response = rentalsApiService.getRental(id)
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                AuthResult.Success(body)
+            } else {
+                AuthResult.Error(response.code(), "Sunucu hatası (kod: ${response.code()}).")
+            }
+        } catch (e: IOException) {
+            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
+        }
+    }
+
+    suspend fun getStats(month: String? = null): AuthResult<RentalStatsResponseDto> {
+        return try {
+            val response = rentalsApiService.getStats(month)
             val body = response.body()
             if (response.isSuccessful && body != null) {
                 AuthResult.Success(body)

@@ -1447,3 +1447,102 @@
 Bu, kullanıcının başlangıçta bildirdiği görevin TÜM maddeleri (ortak post-auth yönlendirme
 mekanizması + Confirmation'ın gerçek API'ye bağlanması) tamamlandı ve gerçek backend'e karşı
 uçtan uca doğrulandı anlamına gelir.
+
+### 2026-07-18 — History (Kiralamalarım) için eksik 3 Rentals API'si eklendi: listMine/getRental/getStats (3 dosya)
+- **Ne yapıldı:** Kiralamalarım ekranını gerçek API'ye bağlamadan önceki altyapı adımı olarak,
+  `openapi.json`'da tanımlı ama hiç eklenmemiş üç uç eklendi: `GET /rentals` (`listMine`,
+  kullanıcının tüm kiralamaları), `GET /rentals/{id}` (`getRental`, tek kiralama detayı),
+  `GET /rentals/stats` (`getStats`, opsiyonel `month` query parametresiyle aylık özet).
+  `RentalDtos.kt`'ye şemayla birebir `RentalStatsResponseDto` (month/tripCount/totalSpent/
+  totalMinutes/totalKm) eklendi. `RentalsApiService.kt`'ye üç yeni Retrofit fonksiyonu
+  eklendi. `RentalsRepository.kt`'ye bunları saran, mevcut `AuthResult<T>` +
+  `try/catch (IOException)` desenine birebir uyan üç fonksiyon eklendi. Bu batch'te
+  HistoryViewModel/Screen/HistoryMockSource'a KASITLI olarak dokunulmadı (kullanıcının açık
+  talebiyle yalnızca altyapı; ekranın gerçek API'ye bağlanması ayrı bir batch).
+- **Değişen dosyalar:** `data/network/dto/RentalDtos.kt`, `data/network/RentalsApiService.kt`,
+  `data/repository/RentalsRepository.kt`.
+- **Neden bu şekilde yapıldı:** `tripCount` openapi'de `type: number` (integer değil)
+  olduğundan, projenin `distanceKm`/`durationMinutes` gibi diğer sayısal alanlarda zaten
+  kullandığı `Double` konvansiyonuyla tutarlı tutuldu — `Int`'e çevirmek şemadan sapma
+  olurdu. `di/NetworkModule.kt`'ye dokunulmadı çünkü `RentalsApiService` zaten oradan
+  sağlanıyor, yeni bir provider gerekmiyor.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD SUCCESSFUL
+  (yalnızca projeyle ilgisiz, mevcut bir Kotlin derleyici uyarısı — `@Inject`/parametre hedefi
+  hakkında). Yeni fonksiyonlar henüz hiçbir ViewModel'den çağrılmadığından runtime testi
+  yapılmadı (bilinçli olarak sonraki batch'e bırakıldı).
+
+### 2026-07-18 — HistoryViewModel gerçek RentalsRepository.listMine()'a bağlandı (3 dosya)
+- **Ne yapıldı:** `HistoryViewModel`, `class HistoryViewModel : ViewModel()`den `@HiltViewModel`
+  + `@Inject constructor(RentalsRepository)`e taşındı. `loadRentals()`, `MapsViewModel.
+  loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `GET /rentals`
+  (`listMine()`) çağırıyor; sonuç `status == "COMPLETED"` olan kayıtlarla filtrelenip yeni bir
+  `RentalResponseDto.toRentalRecord()` private uzantı fonksiyonuyla mevcut `RentalRecord`e
+  eşleniyor (`dateLabel`, `ActiveRentalContract.kt`'deki `dd.MM.yyyy HH:mm` formatlayıcısının
+  aynısıyla `startedAt`'ten türetiliyor). `HistoryContract.State`e `errorMessage: String? = null`
+  eklendi — hata durumunda ekran sessizce boş kalmak yerine bu mesajı boş-liste alanında
+  gösteriyor (dead-end bırakılmadı). `HistoryScreen.kt`e üç durumlu (`isLoading` → spinner,
+  `rentals.isEmpty()` → `errorMessage` veya "Henüz bir kiralaman yok." metni, aksi halde mevcut
+  `LazyColumn`) bir `when` dallanması eklendi — mock veri hep dolu geldiğinden bu iki durum daha
+  önce hiç ele alınmamıştı.
+- **Değişen dosyalar:** `feature/history/HistoryContract.kt`, `feature/history/HistoryViewModel.kt`,
+  `feature/history/HistoryScreen.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcı onayıyla netleşen karar: `GET /rentals` kullanıcının TÜM
+  kiralamalarını (PREPARING/ACTIVE/COMPLETED/CANCELLED) döndürdüğünden, History ekranı yalnızca
+  `COMPLETED` olanları gösteriyor — PREPARING/ACTIVE zaten ayrı bir "aktif kiralama" akışında
+  (Home banner) gösteriliyor, CANCELLED'ı geçmiş listesine karıştırmak kafa karıştırır ve
+  `totalPrice` bu durumlarda `null` gelebileceğinden yanlış (₺0) bir tutar üretirdi. Hata için
+  Effect/Toast yerine kalıcı bir State alanı (`errorMessage`) tercih edildi — tek seferlik bir
+  Toast mesajı kaçırılırsa ekran açıklamasız boş kalırdı; State alanı kullanıcı ekrana her
+  baktığında görünür kalıyor. `MainScaffold.kt`e KASITLI olarak dokunulmadı — `HistoryRoute()`
+  hâlâ parametresiz çağrılıyor (`onNavigateToDetail` varsayılan no-op `{}`), gerçek detay
+  navigasyonu ayrı bir batch'e (Batch 1c) bırakıldı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD SUCCESSFUL (uyarı
+  yok). Yeni navigasyon/hata kod yollarının emülatörde gerçek backend'e karşı uçtan uca testi
+  (COMPLETED kiralaması olan/olmayan hesap, hata senaryosu) henüz yapılmadı.
+- **Kapsam dışı, ayrı bir temizlik adımı olarak not:** `HistoryMockSource.kt` artık hiçbir yerden
+  çağrılmıyor (bu batch'te teyit edildi) ama dosya limiti gereği silinmedi; ileride kaldırılabilir.
+
+### 2026-07-18 — Geçmiş Detay ekranı (feature/history/detail/) sıfırdan kuruldu ve navigasyona bağlandı (7 dosya, 2 alt-batch)
+- **Ne yapıldı:** `HistoryContract.Effect.NavigateToDetail(rentalId)`'in gittiği yeni bir MVI
+  dörtlüsü eklendi: `HistoryDetailContract.kt` (`ActiveRentalContract.kt`'deki dosya-seviyesi
+  `DateTimeFormatter` deseniyle `formattedStartedAt`/`formattedEndedAt`/ücret alanları computed
+  property olarak tanımlandı), `HistoryDetailViewModel.kt` (`VehicleDetailViewModel.kt`'deki
+  BİREBİR AYNI `@HiltViewModel(assistedFactory=...)` + `@AssistedInject @Assisted rentalId: String`
+  deseni; `loadRental()` `RentalsRepository.getRental(id)`'i `isLoading`/`AuthResult` deseniyle
+  çağırıp `RentalResponseDto`'nun TÜM alanlarını (araç, plan, tarihler, mesafe/süre, ücret dökümü:
+  startFee/serviceFee/discountAmount/totalPrice, durum/ödeme durumu) State'e kopyalıyor),
+  `HistoryDetailScreen.kt` (geri butonlu üst bar + History listesindeki gibi üç durumlu
+  `isLoading`/`errorMessage`/içerik dallanması + araç başlığı, tarih/süre/mesafe kartı, ücret
+  dökümü kartı), `HistoryDetailRoute.kt` (`VehicleDetailRoute.kt` iskeletiyle aynı,
+  konum/izin mantığı YOK — bu ekranın buna ihtiyacı yok).
+  Ardından navigasyon bağlandı: `HistoryRoute.kt`'de bir önceki batch'ten kalma bir hata
+  düzeltildi (`HistoryViewModel` iki batch önce `@HiltViewModel`e taşınmıştı ama Route hâlâ Hilt
+  DIŞI `viewModel()` çağırıyordu — bu haliyle History sekmesi açılır açılmaz çökerdi; `hiltViewModel()`e
+  geçildi). `MainScaffold.kt`'ye `onNavigateToHistoryDetail: (String) -> Unit = {}` parametresi
+  eklendi, `HistoryRoute`'a aktarıldı. `RenCarNavHost.kt`'ye `HISTORY_DETAIL =
+  "history-detail/{rentalId}"` sabiti + `historyDetailRoute()` yardımcı fonksiyonu eklendi;
+  `HOME` bloğu `onNavigateToHistoryDetail`i üst seviye `navController.navigate(...)`e kablolayacak
+  şekilde güncellendi; yeni bir `composable(HISTORY_DETAIL)` bloğu `HistoryDetailRoute`'u
+  `onNavigateBack = { navController.popBackStack() }` ile çağırıyor.
+- **Değişen/yeni dosyalar:** `feature/history/detail/HistoryDetailContract.kt` (yeni),
+  `HistoryDetailViewModel.kt` (yeni), `HistoryDetailScreen.kt` (yeni), `HistoryDetailRoute.kt`
+  (yeni), `feature/history/HistoryRoute.kt`, `navigation/MainScaffold.kt`,
+  `navigation/RenCarNavHost.kt`. 7 dosya olduğundan Agent.md §2.1'deki 5 dosya limitini aşmamak
+  için TEK onay altında İKİ alt-batch olarak uygulandı: önce yeni 4 dosyalık MVI dörtlüsü (izole,
+  henüz hiçbir yerden çağrılmıyor, ayrı derlendi), ardından 3 dosyalık navigasyon bağlama +
+  bug fix (ayrı derlendi).
+- **Neden bu şekilde yapıldı:** Detay ekranına navigasyon köprüsü, `VehicleDetail`'in zaten
+  kanıtlanmış deseniyle BİREBİR AYNI kuruldu: `MainScaffold`'un kendi iç NavHost'u üst seviye
+  navigasyon graph'ına asla doğrudan erişmiyor, bunun yerine üst seviye `RenCarNavHost`'tan aldığı
+  bir callback'i (`onNavigateToHistoryDetail`) alt Route'a (`HistoryRoute`) olduğu gibi aktarıyor;
+  gerçek `navigate(...)` çağrısı yalnızca `RenCarNavHost`'un `HOME` composable bloğunda yapılıyor.
+  Bu tutarlılık zaten `onNavigateToVehicleDetail`/`onNavigateToActiveRental` için kanıtlanmış bir
+  desen olduğundan alternatif bir yaklaşım (örn. History'nin kendi alt-graph'ını açması)
+  değerlendirilmedi. `HistoryRoute.kt`'deki `viewModel()` → `hiltViewModel()` düzeltmesi bu
+  batch'in kapsamına dahil edildi çünkü Detay ekranına hiç ulaşılamazdı (liste ekranı zaten
+  runtime'da çökerdi) — ayrı bir batch'e ertelemek anlamsız olurdu.
+- **Kendi kontrolüm:** Her iki alt-batch ayrı ayrı `./gradlew :app:compileDebugKotlin` ile
+  derlendi, ikisi de BUILD SUCCESSFUL (uyarı yok). Emülatörde gerçek backend'e karşı uçtan uca
+  runtime testi (History listesinden bir karta tıklayıp Detay ekranının gerçek veriyle açılması,
+  geri tuşu, hata senaryosu) HENÜZ YAPILMADI — bir önceki batch'te bulunan `HistoryRoute`
+  çökme hatası da dahil olmak üzere bu batch'in gerçek cihazda ilk kez doğrulanması gerekiyor.
