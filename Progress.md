@@ -2138,3 +2138,137 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   navigasyonlu ve 3-tuşlu navigasyonlu cihazlarda, ayrıca çentikli ekranlarda) geri butonlarının
   ve alt butonların artık sistem çubuklarıyla çakışmadığı GÖRSEL OLARAK DOĞRULANAMADI — bir
   sonraki oturumda cihazda test edilmeli.
+
+### 2026-07-18 — Cüzdan (Wallet) network/repository altyapısı kuruldu (4 dosya)
+
+- **Ne yapıldı:** Cüzdan ekranı için (o ana kadar tamamen `WalletMockSource`
+  ile beslenen mock bir ekrandı) `GET /wallet` ve `POST /wallet/topup`
+  uçlarına bağlanacak Retrofit/Hilt altyapısı sıfırdan kuruldu:
+  `WalletResponseDto`/`WalletTransactionDto`/`TopupDto` (openapi.json'daki
+  `Wallet` tag'i şemasına birebir), `WalletApiService` (GET wallet, POST
+  wallet/topup), ve `AuthRepository.kt`'deki paylaşılan `AuthResult<T>` +
+  `extractErrorMessage()` desenini yeniden kullanan `WalletRepository`
+  (`getWallet()`, `topup(amount)`). `NetworkModule.kt`'ye
+  `provideWalletApiService` eklendi. `WalletViewModel`/`WalletRoute`/
+  `WalletScreen`/`WalletMockSource`'a bilinçli olarak dokunulmadı — ekran
+  hâlâ mock veriyle çalışıyor, bu batch sadece altyapı.
+- **Değişen dosyalar (yeni):** `data/network/dto/WalletDtos.kt`,
+  `data/network/WalletApiService.kt`, `data/repository/WalletRepository.kt`.
+  **Değişen dosya:** `di/NetworkModule.kt` (`provideWalletApiService`
+  eklendi).
+- **Neden bu şekilde yapıldı:** `WalletTransactionDto.type` alanı (`TOPUP`/
+  `RENTAL_PAYMENT`/`REFERRAL_BONUS`), projedeki yerleşik kararla tutarlı
+  olarak Kotlin enum değil `String` tutuldu (bkz. `role`/`type`/`segment`/
+  `status` için aynı gerekçe — backend yeni bir değer dönerse Gson
+  deserialization'ının patlamasını önlemek için). `rentalId` alanı ham
+  şemada `"type": "object", "nullable": true` olarak tanımlıydı (açıklaması
+  "ilgili kiralamanın id'si" olmasına rağmen) — Agent.md §2.2 (uydurma
+  yasağı) gereği bu belirsizlik kullanıcıya soruldu, kullanıcı onayıyla
+  `String?` olarak tiplendi. `POST /wallet/topup` başarı kodu şemada 200
+  değil 201 — `Response.isSuccessful` tüm 2xx'i kapsadığından
+  `WalletRepository`'de ekstra bir ayrıma gerek duyulmadı. `topup()`
+  fonksiyonu ayrıca bir `getWallet()` çağrısı yapmıyor çünkü backend zaten
+  güncel `WalletResponseDto`'yu (bakiye + işlemler) topup cevabında
+  döndürüyor. Kayıtlı kart (`savedCards`) alanı kapsam dışı bırakıldı —
+  backend'de bu alanın karşılığı `Wallet` tag'i DEĞİL, ayrı bir `Cards`
+  tag'i altında (`GET`/`POST /cards`, `PATCH /cards/{id}/default`,
+  `DELETE /cards/{id}`) mevcut; bu batch'in konusu olmadığından sıradaki
+  (Cards altyapı) batch'ine bırakıldı.
+
+### 2026-07-18 — Kayıtlı Kartlar (Cards) network/repository altyapısı kuruldu (4 dosya)
+
+- **Ne yapıldı:** Bir önceki Wallet altyapı batch'inde kapsam dışı
+  bırakılan `savedCards` alanının backend karşılığı olan `Cards` tag'i
+  (`GET /cards`, `POST /cards`, `PATCH /cards/{id}/default`,
+  `DELETE /cards/{id}`) için Wallet batch'iyle aynı desende Retrofit/Hilt
+  altyapısı kuruldu: `CardResponseDto`/`CreateCardDto`
+  (openapi.json'daki `Cards` şemasına birebir), `CardsApiService` (4 uç),
+  ve paylaşılan `AuthResult<T>` desenini kullanan `CardsRepository`
+  (`listCards()`, `addCard(brand, last4, expMonth, expYear)`,
+  `setDefaultCard(id)`, `deleteCard(id)`). `NetworkModule.kt`'ye
+  `provideCardsApiService` eklendi. `WalletViewModel`/`WalletScreen`
+  entegrasyonuna bilinçli olarak dokunulmadı — sonraki batch'in konusu.
+- **Değişen dosyalar (yeni):** `data/network/dto/CardDtos.kt`,
+  `data/network/CardsApiService.kt`, `data/repository/CardsRepository.kt`.
+  **Değişen dosya:** `di/NetworkModule.kt` (`provideCardsApiService`
+  eklendi).
+- **Neden bu şekilde yapıldı:** `CardResponseDto.brand`/`CreateCardDto.brand`
+  alanı, şemada kapalı bir enum (`VISA`/`MASTERCARD`) olmasına rağmen
+  Kotlin enum değil `String` tutuldu — projedeki yerleşik konvansiyonla
+  (`role`/`type`/`segment`/`status`/`transmission`/`WalletTransactionDto.type`)
+  tutarlılık ve backend ileride yeni bir marka (ör. TROY/AMEX) döndürürse
+  Gson deserialization'ının çökmesini önlemek için (kullanıcı onayıyla
+  karar verildi, gerekçe planda sunuldu). `expMonth`/`expYear` şemada
+  `"type": "number"` olsa da `VehicleResponseDto.seats` emsaliyle tutarlı
+  olarak `Int` tutuldu (tam sayı anlamına gelen alanlar, parasal değil).
+  `deleteCard()`, `RentalsRepository.cancelRental()` ile BİREBİR aynı
+  desende `AuthResult<Unit>` döndürüyor — `DELETE /cards/{id}` 204 No
+  Content döndüğünden gövde kontrolü yapılmadan yalnızca
+  `response.isSuccessful` kontrol ediliyor (`CardsApiService.deleteCard`
+  de aynı nedenle `Response<Unit>` imzasını kullanıyor, projede zaten
+  `RentalsApiService.cancelRental`'da mevcut bir emsal). `CreateCardDto`'da
+  kullanıcının açık talimatıyla tam kart numarası/CVV alanı KESİNLİKLE
+  YOK — yalnızca `brand`/`last4`/`expMonth`/`expYear` (backend zaten bunu
+  400 ile reddediyor, PCI uyumluluğu).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Yeni dosyalar henüz hiçbir ViewModel'den çağrılmadığından
+  runtime/network testi yapılmadı (Wallet altyapı batch'iyle tutarlı olarak
+  sonraki batch'e bırakıldı).
+
+### 2026-07-18 — WalletViewModel/Route/Screen gerçek API'ye bağlandı (4 dosya)
+
+- **Ne yapıldı:** Cüzdan ekranı, önceki iki batch'te kurulan ama hiçbir
+  yerden çağrılmayan `WalletRepository`/`CardsRepository`'ye uçtan uca
+  bağlandı. `WalletViewModel` artık `@HiltViewModel` +
+  `@Inject constructor(WalletRepository, CardsRepository)`; açılışta
+  `coroutineScope { async {...}; async {...} }` (SplashViewModel'deki
+  paralel-çağrı deseni, min-delay'siz) ile `GET /wallet` +
+  `GET /cards` paralel çağrılıyor. "Bakiye Yükle" artık gerçek bir
+  `ModalBottomSheet` (10-5000 TL client-side doğrulama, `POST /wallet/topup`,
+  dönen `WalletResponseDto` doğrudan state'e yazılıyor). "+ Ekle" artık
+  gerçek bir `ModalBottomSheet` (VISA/MASTERCARD `FilterChip` seçimi +
+  last4 + ay/yıl, `YearMonth` ile geçmiş SKT reddi, `POST /cards`). Bir
+  karta tıklamak `PATCH /cards/{id}/default` çağırıyor; yeni eklenen bir
+  silme ikonu `DELETE /cards/{id}` çağırıp SONRASINDA `listCards()` ile
+  listeyi yeniden çekiyor (yerel "isDefault tahmini" YOK).
+  `WalletRoute.kt` eski `viewModel()` yerine `hiltViewModel()` kullanıyor.
+  `WalletMockSource.kt` artık hiçbir yerden çağrılmıyor ama
+  `HistoryMockSource`/`ProfileMockSource` kararıyla tutarlı olarak
+  SİLİNMEDİ.
+- **Değişen dosyalar:** `feature/wallet/WalletContract.kt`,
+  `feature/wallet/WalletViewModel.kt`, `feature/wallet/WalletRoute.kt`,
+  `feature/wallet/WalletScreen.kt`.
+- **Neden bu şekilde yapıldı:** `CardType` enum'ına `OTHER` eklendi;
+  backend'in `brand` alanı `String` olduğundan hem `WalletViewModel
+  .toSavedCard()`'daki hem de `WalletScreen.CardTypeIcon`'daki
+  `when (brand)`/`when (type)` blokları artık exhaustive bir `else`/`OTHER`
+  dalına sahip — kullanıcının işaretlediği "bilinmeyen marka çökmesin"
+  riski böyle kapatıldı. `State`'e `errorMessage`/`isTopupSubmitting`/
+  `isAddCardSubmitting` eklendi; hata gösterimi History/Profile'daki kalıcı
+  `State.errorMessage` deseniyle tutarlı (ayrı bir `ShowError` Effect'i
+  yok). Sheet'lerin başarı sonrası otomatik kapanması yeni bir `Close*`
+  Effect'i ile YAPILMADI — `mvi-contracts.md` Effect isimlerinin yalnızca
+  `Navigate`/`Show` prefixiyle başlamasını zorunlu kılıyor; bunun yerine
+  Route'ta `isTopupSubmitting`/`isAddCardSubmitting`'in `true→false`
+  geçişini (önceki değer `remember` ile izlenerek) `errorMessage == null`
+  koşuluyla birlikte kontrol eden bir `LaunchedEffect` sheet'i kapatıyor.
+  `AddBalanceSheet`/`AddCardSheet`, `WalletScreen.kt` içinde `private`
+  DEĞİL tanımlandı çünkü `WalletRoute.kt` (aynı paket, farklı dosya) bunları
+  çağırıyor — Kotlin'de `private` üst düzey bildirim dosya kapsamıyla
+  sınırlı. `addCard`/`setDefaultCard` sonrası ekstra bir `GET /cards`
+  YOK (dönen veri zaten kesin); yalnızca `deleteCard` sonrası tam liste
+  yenileniyor çünkü backend'in yeni varsayılanı hangi karta atadığı
+  istemci tarafından tahmin edilemez. Kart silme için onay diyaloğu
+  eklenmedi (istenmedi).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (tek denemede, yeni uyarı yok). `grep -r WalletMockSource
+  app/src/main/java` ile dosyanın artık yalnızca kendi tanımında geçtiği
+  (hiçbir çağıran kalmadığı) doğrulandı. Bağlı emülatör/cihaz olmadığından
+  (`adb` kurulu değil) runtime testi (cüzdan açılışta gerçek bakiye/kart
+  verisiyle dolması, "Bakiye Yükle"/"+ Ekle" sheet'lerinin doğrulama ve
+  API çağrısı akışı, kart silme sonrası varsayılanın doğru yeniden
+  çekilmesi) YAPILAMADI — bir sonraki oturumda cihazda elle doğrulanmalı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Yeni dosyalar henüz hiçbir ViewModel'den çağrılmadığından
+  runtime/network testi yapılmadı (Auth/Vehicles altyapı batch'leriyle
+  tutarlı olarak sonraki batch'e bırakıldı).
