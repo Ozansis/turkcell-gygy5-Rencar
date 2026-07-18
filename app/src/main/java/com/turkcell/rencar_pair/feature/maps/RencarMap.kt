@@ -37,6 +37,7 @@ import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 val DEFAULT_CENTER: LatLng = LatLng(38.51740367746754, 27.161930350129918)
 
@@ -78,6 +79,12 @@ fun RencarMap(
     modifier: Modifier = Modifier,
     initialCenter: LatLng = DEFAULT_CENTER,
     initialZoom: Double = 10.0,
+    // Konumun (GPS fix) yolda olup olmadığını belirtir. true ise ilk kare, araç kümesine
+    // düşmeden önce konum için makul bir süre bekler (Haritalar ekranı: izin verilip konum
+    // servisi açıkken GPS fix birkaç saniye sürebilir). false (varsayılan) ise konum zaten
+    // tek seferlik/sessiz okunuyordur (VehicleDetail/ActiveRental mini haritaları) ve daha
+    // fazla beklemenin bir anlamı yoktur — ilk kare hemen araç(lar)a düşer.
+    canObtainLocation: Boolean = false,
     controller: RencarMapController? = null,
     routePoints: List<GeoPoint> = emptyList()
 ) {
@@ -219,20 +226,35 @@ fun RencarMap(
         updateRoute(style, routePoints)
     }
 
-    // İlk açılışta kameranın tek seferlik konumlanması -> kullanıcı konumu geldiyse ona,
-    // gelmediyse (izin reddedildiyse/GPS gecikirse) araç kümesinin tamamına odaklanır.
-    // Aksi halde kamera DEFAULT_CENTER'da asılı kalır ve araçlar ekranın dışında görünmez olur.
+    // İlk açılışta kameranın tek seferlik konumlanması. Kullanıcı konumu geldiği an kamera
+    // SADECE ona zum yapar (izin verir vermez önce kendi konumunu merkezde görmeli) — araç
+    // sınır kutusuna göre kare atlanmaz.
     var hasFramedInitialView by remember { mutableStateOf(false) }
-    LaunchedEffect(mapAndStyle, myLocation, vehicles) {
+    LaunchedEffect(mapAndStyle, myLocation) {
         if (hasFramedInitialView) return@LaunchedEffect
         val (map, _) = mapAndStyle ?: return@LaunchedEffect
-        val points = buildList {
-            myLocation?.let { add(it.toLatLng()) }
-            addAll(vehicles.map { it.location.toLatLng() })
-        }
-        if (points.isEmpty()) return@LaunchedEffect
+        val location = myLocation ?: return@LaunchedEffect
 
         hasFramedInitialView = true
+        map.animateCamera(CameraUpdateFactory.newLatLngZoom(location.toLatLng(), 15.0))
+    }
+
+    // Yedek kare: konum hiç gelmeyecekse (izin reddedildi/GPS kapalı -> canObtainLocation=false)
+    // hemen, gelebilecek durumdaysa (canObtainLocation=true) GPS fix'e gerçekçi bir süre (8 sn)
+    // tanındıktan sonra kamera DEFAULT_CENTER'da asılı kalmasın diye araç kümesinin tamamına düşülür.
+    // NOT: myLocation gelirse yukarıdaki efekt hasFramedInitialView'i true yapar, bu efekt devreye
+    // girmeden önce iptal/erken-dönüş olur — "araçlar konumdan önce gösteriliyor" riski budur.
+    LaunchedEffect(mapAndStyle, vehicles, canObtainLocation) {
+        val (map, _) = mapAndStyle ?: return@LaunchedEffect
+        if (hasFramedInitialView || vehicles.isEmpty()) return@LaunchedEffect
+
+        if (canObtainLocation) {
+            delay(8_000)
+            if (hasFramedInitialView || myLocation != null) return@LaunchedEffect
+        }
+
+        hasFramedInitialView = true
+        val points = vehicles.map { it.location.toLatLng() }
         if (points.size == 1) {
             map.animateCamera(CameraUpdateFactory.newLatLngZoom(points.first(), 14.0))
         } else {

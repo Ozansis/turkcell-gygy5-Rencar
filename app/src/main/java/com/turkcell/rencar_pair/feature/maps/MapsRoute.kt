@@ -2,10 +2,16 @@ package com.turkcell.rencar_pair.feature.maps
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent as AndroidIntent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.Looper
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -18,11 +24,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import org.maplibre.android.geometry.LatLng
@@ -58,6 +66,21 @@ fun MapsRoute(
         )
     }
 
+    val enableLocationServicesLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) {
+        // Sonuç kabul/iptal fark etmez; gerçek durumu sistemden tekrar sorgula.
+        checkLocationSettings(context) { enabled, _ ->
+            viewModel.onIntent(
+                if (enabled) MapsContract.Intent.LocationServicesEnabled
+                else MapsContract.Intent.LocationServicesDisabled
+            )
+        }
+    }
+
+    // İzin daha önce verilmemişse ekran, onay verilene kadar MapsScreen'deki
+    // engelleyici izin ekranında kalır (bkz. MapsScreen.LocationRequiredOverlay);
+    // burada sistem diyaloğu yalnızca ilk denemede otomatik açılır.
     LaunchedEffect(Unit) {
         if (hasLocationPermission) {
             viewModel.onIntent(MapsContract.Intent.LocationPermissionGranted)
@@ -73,6 +96,21 @@ fun MapsRoute(
         onLocationPermissionStatusChanged(hasLocationPermission)
     }
 
+    // İzin verilir verilmez konum servisinin (GPS/Ağ) fiilen açık olup olmadığı kontrol edilir;
+    // kapalıysa sistemin "Konumu Aç" diyaloğu uygulama içinden tetiklenir — kullanıcı artık
+    // ayarlara gidip elle açmak zorunda kalmaz.
+    LaunchedEffect(hasLocationPermission) {
+        if (hasLocationPermission) {
+            checkLocationSettings(context) { enabled, resolvable ->
+                viewModel.onIntent(
+                    if (enabled) MapsContract.Intent.LocationServicesEnabled
+                    else MapsContract.Intent.LocationServicesDisabled
+                )
+                if (!enabled) resolvable?.let { enableLocationServicesLauncher.launch(it) }
+            }
+        }
+    }
+
     // Üst bileşen, izinsiz sekme geçişi engellendiğinde bu tetikleyiciyi artırarak
     // sistem izin diyaloğunun tekrar açılmasını ister.
     LaunchedEffect(permissionRequestTrigger) {
@@ -84,6 +122,32 @@ fun MapsRoute(
     }
 
     val fusedClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    // Kullanıcı konum servisini uygulama dışında (hızlı ayarlar/sistem ayarları) açıp
+    // kapattığında ekranın anında haberdar olması için sistem yayını dinlenir — böylece
+    // "telefondan konumu açman gerekiyor" sonrası uygulamaya dönünce elle yenileme gerekmez.
+    DisposableEffect(hasLocationPermission) {
+        if (!hasLocationPermission) return@DisposableEffect onDispose { }
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context, intent: AndroidIntent) {
+                checkLocationSettings(context) { enabled, _ ->
+                    viewModel.onIntent(
+                        if (enabled) MapsContract.Intent.LocationServicesEnabled
+                        else MapsContract.Intent.LocationServicesDisabled
+                    )
+                }
+            }
+        }
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+
+        onDispose { context.unregisterReceiver(receiver) }
+    }
 
     DisposableEffect(hasLocationPermission) {
         if (!hasLocationPermission) return@DisposableEffect onDispose { }
@@ -116,6 +180,12 @@ fun MapsRoute(
                         )
                     }
                 }
+                MapsContract.Effect.RequestLocationPermission -> permissionLauncher.launch(
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                )
+                MapsContract.Effect.RequestEnableLocationServices -> checkLocationSettings(context) { _, resolvable ->
+                    resolvable?.let { enableLocationServicesLauncher.launch(it) }
+                }
                 is MapsContract.Effect.NavigateToVehicleDetail -> onNavigateToVehicleDetail(effect.vehicleId, effect.distanceMeters)
                 is MapsContract.Effect.NavigateToActiveRental  -> onNavigateToActiveRental(effect.rentalId)
                 MapsContract.Effect.ShowLocationPermissionDeniedMessage -> Unit
@@ -129,6 +199,22 @@ fun MapsRoute(
         mapController = mapController,
         onIntent = viewModel::onIntent
     )
+}
+
+private fun checkLocationSettings(
+    context: Context,
+    onResult: (enabled: Boolean, resolvable: IntentSenderRequest?) -> Unit
+) {
+    val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5_000L).build()
+    val settingsRequest = LocationSettingsRequest.Builder().addLocationRequest(request).build()
+
+    LocationServices.getSettingsClient(context).checkLocationSettings(settingsRequest)
+        .addOnSuccessListener { onResult(true, null) }
+        .addOnFailureListener { exception ->
+            val resolvable = (exception as? ResolvableApiException)
+                ?.let { IntentSenderRequest.Builder(it.resolution).build() }
+            onResult(false, resolvable)
+        }
 }
 
 @SuppressLint("MissingPermission")

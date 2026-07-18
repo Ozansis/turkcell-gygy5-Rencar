@@ -5,6 +5,7 @@ object MapsContract {
     data class State(
         val myLocation: GeoPoint? = null,
         val hasLocationPermission: Boolean = false,
+        val isLocationServiceEnabled: Boolean = true,
         val vehicles: List<NearbyVehicle> = emptyList(),
         val selectedType: VehicleType? = null,
         val searchQuery: String = "",
@@ -45,6 +46,10 @@ object MapsContract {
         data class LocationChanged(val location: GeoPoint)            : Intent
         data object LocationPermissionGranted                         : Intent
         data object LocationPermissionDenied                          : Intent
+        data object LocationServicesEnabled                            : Intent
+        data object LocationServicesDisabled                          : Intent
+        data object PermissionRequestRetryClicked                     : Intent
+        data object EnableLocationServicesClicked                     : Intent
         data class TypeFilterSelected(val type: VehicleType?)         : Intent
         data class SearchQueryChanged(val value: String)               : Intent
         data class SegmentFilterSelected(val segment: VehicleSegment?) : Intent
@@ -60,6 +65,8 @@ object MapsContract {
 
     sealed interface Effect {
         data object RequestLocationRefresh                        : Effect
+        data object RequestLocationPermission                     : Effect
+        data object RequestEnableLocationServices                 : Effect
         data class NavigateToVehicleDetail(val vehicleId: String, val distanceMeters: Int) : Effect
         data class NavigateToActiveRental(val rentalId: String)   : Effect
         data object ShowLocationPermissionDeniedMessage           : Effect

@@ -59,6 +59,9 @@ fun MapsScreen(
             vehicles = state.filteredVehicles,
             onVehicleClick = { vehicleId -> onIntent(MapsContract.Intent.VehicleMarkerClicked(vehicleId)) },
             modifier = Modifier.fillMaxSize(),
+            // İzin verilip konum servisi açıkken GPS fix yolda demektir; ilk kare bunun için
+            // bekler ve araç kümesine erken düşüp kullanıcı konumunu "atlamaz".
+            canObtainLocation = state.hasLocationPermission && state.isLocationServiceEnabled,
             controller = mapController
         )
 
@@ -109,6 +112,79 @@ fun MapsScreen(
             onIntent = onIntent,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        // Konum izni verilene / konum servisi açılana kadar harita bu ekranın altında kalır;
+        // kullanıcı onay verene kadar kapanmaz (izin diyaloğu reddedilse veya kapatılsa bile).
+        when {
+            !state.hasLocationPermission -> LocationRequiredOverlay(
+                title = "Konum izni gerekli",
+                message = "Yakınındaki araçları ve mesafeleri gösterebilmemiz için konum iznini vermelisin.",
+                buttonLabel = "İzin Ver",
+                onClick = { onIntent(MapsContract.Intent.PermissionRequestRetryClicked) }
+            )
+            !state.isLocationServiceEnabled -> LocationRequiredOverlay(
+                title = "Konum servisi kapalı",
+                message = "Haritada yerini görebilmemiz için telefonunun konum servisini (GPS) açman gerekiyor.",
+                buttonLabel = "Konumu Aç",
+                onClick = { onIntent(MapsContract.Intent.EnableLocationServicesClicked) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun LocationRequiredOverlay(
+    title: String,
+    message: String,
+    buttonLabel: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier
+                .padding(32.dp)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            tonalElevation = 8.dp,
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(40.dp)
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = onClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(buttonLabel)
+                }
+            }
+        }
     }
 }
 
