@@ -1634,3 +1634,43 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
 - **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD
   SUCCESSFUL, uyarı yok. Emülatörde runtime testi (Profil → Çıkış Yap → Login →
   geri tuşu → uygulamadan çıkma, Profile'a dönmeme) HENÜZ YAPILMADI.
+
+### 2026-07-18 — Profil ekranı kullanıcı bilgisi + ehliyet kartı gerçek API'ye bağlandı (3 dosya)
+
+- **Ne yapıldı:** `ProfileViewModel.loadProfile()` artık `ProfileMockSource` yerine
+  `AuthRepository.getMe()` çağırıyor (`HistoryViewModel.loadRentals()`'daki `AuthResult`
+  `when` deseniyle birebir aynı); başarılıysa `userName`/`phoneNumber` `UserResponseDto.
+  fullName`/`phone` alanlarından dolduruluyor (`phone` nullable olduğundan `?: ""`),
+  hata durumunda yeni `ProfileContract.State.errorMessage` alanı dolduruluyor (dead-end
+  yok, `ProfileScreen.kt`'de başlığın altında kırmızı bir satır olarak gösteriliyor).
+  Kullanıcıyla netleşen ek karar üzerine ehliyet kartı da `LicenseRepository.getStatus()`'a
+  bağlandı: `LicenseVerification`'dan API'de karşılığı olmayan `licenseClass` alanı
+  kaldırıldı, yeni bir `LicenseStatusResponseDto.toLicenseVerification()` uzantısı
+  `status`'u (`APPROVED`/`REJECTED`/`UNDER_REVIEW`/diğer) `isVerified`/`statusLabel`'e
+  eşliyor; bu çağrı yalnızca `getMe()` başarılıysa yapılıyor, kendi hatası ayrı bir
+  `errorMessage` üretmiyor (sessizce `license = null` kalıyor). Bu sırada `ProfileScreen.kt`'de
+  önceden fark edilmemiş bir hata düzeltildi: `LicenseCard` mock veri hep `isVerified=true`
+  döndürdüğünden şimdiye kadar `isVerified` durumuna HİÇ bakmadan her zaman yeşil ikon +
+  "Ehliyet doğrulandı" gösteriyordu; artık gerçek `isVerified`'a göre yeşil/nötr renk ve
+  "doğrulandı"/"doğrulanmadı" metni arasında dallanıyor. Diğer 5 menü butonu (Profili
+  Düzenle/Ödeme Yöntemleri/Ayarlar/Yardım/Davet Et) kullanıcının açık talimatıyla KAPSAM
+  DIŞI bırakıldı, dokunulmadı.
+- **Değişen dosyalar:** `feature/profile/ProfileContract.kt`, `feature/profile/
+  ProfileViewModel.kt`, `feature/profile/ProfileScreen.kt`. Ayrıca `feature/profile/
+  ProfileMockSource.kt`'de mekanik bir derleme düzeltmesi yapıldı (`LicenseVerification`
+  çağrısından kaldırılan `licenseClass` parametresi silindi) — dosya hâlâ hiçbir yerden
+  çağrılmıyor, sadece `LicenseVerification`'ın yeni şekliyle derlenebilir kalması
+  gerekiyordu (History'deki `HistoryMockSource` kararıyla tutarlı: dosya silinmiyor).
+- **Neden bu şekilde yapıldı:** Kullanıcıya AskUserQuestion ile üç seçenek sunuldu
+  (LicenseRepository'ye bağla / mock veriyi ViewModel'e taşı / null bırak); kullanıcı
+  "LicenseRepository.getStatus() ile bağla" seçeneğini onayladı. `getStatus()` hatasının
+  `errorMessage`'a karıştırılmaması bilinçli bir tercih: kimlik yükleme hatasıyla ehliyet
+  yükleme hatası kullanıcı için ayırt edilemez hale gelmesin diye ayrı tutuldu. `LicenseCard`
+  düzeltmesi kapsam genişletme değil, gerçek veri artık `isVerified=false` üretebildiğinden
+  yanlış "doğrulandı" mesajının kullanıcıya gösterilmeye devam etmesini önlemek için zorunlu
+  bir düzeltmeydi.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD SUCCESSFUL
+  (yalnızca projeyle ilgisiz, önceden var olan uyarılar — `@Inject`/parametre hedefi ve
+  deprecated `Icons.Filled.List`). Bağlı bir emülatör/cihaz olmadığından (`adb devices`
+  boş döndü) runtime testi (gerçek CUSTOMER hesabıyla Profil'de gerçek ad/telefonun ve
+  doğru ehliyet durumunun görünmesi, hata senaryosu) HENÜZ YAPILMADI.
