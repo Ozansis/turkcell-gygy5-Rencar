@@ -1815,3 +1815,32 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   BUILD SUCCESSFUL, uyarı yok. `HelpRoute`/`InviteRoute` henüz hiçbir yerden
   çağrılmadığından (izole) runtime testi bilinçli olarak navigasyon bağlama batch'ine
   bırakıldı.
+
+### 2026-07-18 — Backend hata mesajları artık kullanıcıya gösteriliyor (repository katmanı, 5 dosya)
+
+- **Ne yapıldı:** Kullanıcının "ehliyet onaylama 3. sayfa neden bekliyor" sorusu
+  araştırılırken, tüm repository'lerdeki hata yakalamanın backend'in döndüğü
+  `{"statusCode":...,"message":"...","error":"..."}` gövdesini hiç okumadığı,
+  HTTP koduna bakmaksızın her zaman sabit "Sunucu hatası (kod: X)." metni
+  ürettiği tespit edildi (`response.errorBody()` kod tabanında hiç okunmuyordu).
+  `AuthRepository.kt`'ye `Response<*>.extractErrorMessage()` adlı paylaşılan bir
+  extension fonksiyon eklendi: Gson `JsonParser` ile `errorBody()` içindeki
+  `message` alanını okuyor (NestJS validation hatalarında dizi olabileceğinden
+  bu durumda satırlarla birleştiriyor), ayrıştırma başarısız olursa eski jenerik
+  metne düşüyor. 5 repository dosyasındaki toplam 17 tekrar bu fonksiyona
+  yönlendirildi.
+- **Değişen dosyalar:** `data/repository/AuthRepository.kt` (yeni extension
+  fonksiyon + 1 çağrı), `data/repository/LicenseRepository.kt` (2 çağrı),
+  `data/repository/VehiclesRepository.kt` (3 çağrı),
+  `data/repository/ReservationsRepository.kt` (1 çağrı),
+  `data/repository/RentalsRepository.kt` (10 çağrı).
+- **Neden bu şekilde yapıldı:** Yardımcı fonksiyon yeni bir dosya açmak yerine
+  `AuthRepository.kt`'ye eklendi — `AuthResult` sealed interface zaten orada
+  tanımlıydı ve Agent.md §2.1'in 5 dosya limitini aşmadan (tam 5 dosyada kalarak)
+  tüm repository'lerin ortak kullanabileceği bir yer sağladı. ViewModel/UI
+  katmanına (Toast gösterimi) dokunulmadı — onlar zaten `AuthResult.Error.message`'ı
+  olduğu gibi gösteriyordu, sadece repository'nin ürettiği mesaj değişti.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD
+  SUCCESSFUL (yalnızca projede önceden var olan, bu değişiklikle ilgisiz iki
+  `@ApplicationContext` annotation-target uyarısı). Gerçek bir hatalı istekle
+  (örn. kayıtsız telefonla login) uçtan uca runtime testi henüz yapılmadı.
