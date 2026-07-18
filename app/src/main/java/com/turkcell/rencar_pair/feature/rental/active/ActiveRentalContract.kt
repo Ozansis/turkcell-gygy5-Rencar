@@ -58,8 +58,8 @@ object ActiveRentalContract {
     }
 
     sealed interface Effect {
-        data object NavigateToHome                : Effect
-        data class ShowInfo(val message: String)   : Effect
-        data class ShowError(val message: String)  : Effect
+        data class NavigateToPayment(val rentalId: String) : Effect
+        data class ShowInfo(val message: String)           : Effect
+        data class ShowError(val message: String)          : Effect
     }
 }

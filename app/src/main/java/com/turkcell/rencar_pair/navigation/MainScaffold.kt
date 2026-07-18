@@ -45,6 +45,7 @@ private val bottomNavItems = listOf(
 
 @Composable
 fun MainScaffold(
+    startTab: BottomNavItem = BottomNavItem.Map,
     onNavigateToVehicleDetail: (String, Int) -> Unit = { _, _ -> },
     onNavigateToActiveRental: (String) -> Unit = {},
     onNavigateToHistoryDetail: (String) -> Unit = {},
@@ -138,7 +139,7 @@ fun MainScaffold(
     ) { innerPadding ->
         NavHost(
             navController    = navController,
-            startDestination = BottomNavItem.Map.route,
+            startDestination = startTab.route,
             modifier         = Modifier.padding(innerPadding)
         ) {
             composable(BottomNavItem.Map.route) {

@@ -2272,3 +2272,71 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   BUILD SUCCESSFUL. Yeni dosyalar henüz hiçbir ViewModel'den çağrılmadığından
   runtime/network testi yapılmadı (Auth/Vehicles altyapı batch'leriyle
   tutarlı olarak sonraki batch'e bırakıldı).
+
+### 2026-07-19 — Kiralama Ödemesi ekranı sıfırdan eklendi (3 batch, 12 dosya)
+
+- **Ne yapıldı:** Yolculuk bittikten sonra açılan, o tek kiralamanın ödemesini
+  alan yeni bir ekran (`feature/rental/payment/`) eklendi — "Kiralamalarım"
+  listesinden (`feature/history`, dün tamamlanan iş) tamamen ayrı, o pakete
+  hiç dokunulmadı. Araştırmada iki gerçek bulgu çıktı: (1) finish cevabındaki
+  `usageFee` alanı `GET /rentals/{id}`'de bir daha hiç dönmüyor — bu yüzden
+  Payment ekranı, projedeki her detay ekranıyla (VehicleDetail/
+  ReservationConfirmation/HistoryDetail) aynı desende yalnızca `rentalId`
+  taşıyor, kendi `GET /rentals/{id}` + `GET /cards` çağrısını yapıyor ve
+  `usageFee`'yi `totalPrice - startFee - serviceFee` olarak hesaplıyor (finish
+  endpoint'inin openapi açıklamasında birebir tanımlı formül); (2)
+  `POST /rentals/{id}/pay` projede hiç yoktu, sıfırdan eklendi. Batch 1
+  (veri katmanı): `PayRentalDto`/`PaidCardSummaryDto`/`PayRentalResponseDto`
+  + `RentalsApiService.payRental` + `RentalsRepository.payRental`. Batch 2
+  (yeni MVI dörtlüsü): `RentalPaymentContract/ViewModel/Screen/Route` —
+  `VehicleDetailViewModel`'deki `@AssistedInject`/`@AssistedFactory`
+  deseniyle. Batch 3 (bağlama): `ActiveRentalContract/ViewModel/Route`'taki
+  `Effect.NavigateToHome` → `NavigateToPayment(rentalId)`; `RenCarNavHost.kt`'ye
+  `rental-payment/{rentalId}` rotası ve "Kiralamalarım" sekmesine doğrudan
+  inebilmek için `home-history` rotası (tekrarlanan 6 callback'i çoğaltmamak
+  için ortak `HomeGraph` yardımcı composable'ına taşındı); `MainScaffold.kt`'ye
+  `startTab: BottomNavItem = BottomNavItem.Map` parametresi eklendi.
+- **Değişen dosyalar (yeni):** `feature/rental/payment/RentalPaymentContract.kt`,
+  `RentalPaymentViewModel.kt`, `RentalPaymentScreen.kt`, `RentalPaymentRoute.kt`.
+  **Değişen dosyalar:** `data/network/dto/RentalDtos.kt`,
+  `data/network/RentalsApiService.kt`, `data/repository/RentalsRepository.kt`,
+  `feature/rental/active/ActiveRentalContract.kt`, `ActiveRentalViewModel.kt`,
+  `ActiveRentalRoute.kt`, `navigation/RenCarNavHost.kt`,
+  `navigation/MainScaffold.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcı onayıyla "sadece rentalId taşı,
+  ekranda yeniden çek" seçeneği tercih edildi (alternatifi: finish cevabının
+  tüm alanlarını ~9 path segmentiyle taşımak) — bu sayede
+  `RentalsApiService.finishRental`'ın dönüş tipindeki mevcut uyumsuzluğuna
+  (openapi'de `FinishRentalResponseDto` olması gerekirken hâlâ
+  `RentalResponseDto` yazıyor — AYRI, bağımsız bir düzeltme konusu, bu
+  batch'te dokunulmadı) hiç gerek kalmadı ve Payment ekranı ileride herhangi
+  bir COMPLETED+UNPAID kiralama için bağımsız açılabilir hale geldi. Kart
+  seçimi için `feature/wallet`'a özgü `WalletContract.SavedCard` bilinçli
+  olarak reuse EDİLMEDİ (çapraz-feature Contract importu, paket izolasyonuna
+  aykırı olurdu); bunun yerine zaten hem alanları karşılayan
+  `data/network/dto/CardDtos.kt`'deki `CardResponseDto` doğrudan
+  `State.cards`'ta kullanıldı — ne yeni bir model tekrarı, ne bağımlılık.
+  IYZICO bu batch'te yalnızca UI'da seçilebilir; "Öde" tıklanınca
+  `handlePayClicked` içinde herhangi bir repository/API çağrısından ÖNCE
+  `ShowInfo("İyzico ile ödeme yakında eklenecek.")` Effect'i gönderilip
+  `return` ediliyor — gerçek İyzico entegrasyonu ayrı, sıradaki bir batch'in
+  konusu. Varsayılan ödeme yöntemi: `listCards()` sonucunda `isDefault`
+  kartı varsa `CARD` + o kart, yoksa `WALLET`. Kalıcı `State.errorMessage`
+  deseni (`WalletContract`/`HistoryDetailContract` ile tutarlı) 409/400 ödeme
+  hatalarında ekranı açık tutuyor, kullanıcı yöntem değiştirip tekrar
+  deneyebiliyor (dead-end yok). `PayRentalDto`'da `discountCode`/
+  `iyzicoPaymentId` bilinçli olarak YOK — tasarımda indirim satırı istenmedi,
+  gerçek İyzico akışı kapsam dışı. Toplam dosya sayısı (12) Agent.md §2.1'in
+  5 dosya sınırını aştığından iş, birbirine bağlı 3 batch'e bölündü ve plan
+  onaydan önce kullanıcıya sunuldu (§2.3); onay sürecinde kullanıcının
+  belirttiği bir taslak hata (kart için ayrı, gereksiz bir `PaymentCard`
+  modeli tanımlanmıştı) planı ExitPlanMode ile sunmadan hemen önce düzeltildi.
+- **Kendi kontrolüm:** Her 3 batch'ten sonra ayrı ayrı
+  `./gradlew :app:compileDebugKotlin` çalıştırıldı, üçünde de BUILD
+  SUCCESSFUL, yeni uyarı yok. `grep -r onNavigateToHome` ile `ActiveRental*`
+  dosyalarında eski effect/callback adının hiç kalmadığı, yalnızca ilgisiz
+  Auth/Onboarding/Splash akışlarında (dokunulmayan dosyalar) geçtiği
+  doğrulandı. Bağlı emülatör/cihaz olmadığından (`adb` kurulu değil) uçtan
+  uca akış (Bitir → Ödeme ekranı → Cüzdan/Kart ile öde → Kiralamalarım'a
+  düşme, İyzico "yakında" bildirimi, 409 bakiye yetersiz senaryosu) runtime'da
+  DOĞRULANAMADI — bir sonraki oturumda cihazda test edilmeli.

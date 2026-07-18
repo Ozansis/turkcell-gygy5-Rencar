@@ -57,6 +57,27 @@ data class RentalStatsResponseDto(
     val totalKm: Double
 )
 
+data class PayRentalDto(
+    val method: String,
+    val cardId: String? = null
+)
+
+data class PaidCardSummaryDto(
+    val brand: String,
+    val last4: String
+)
+
+data class PayRentalResponseDto(
+    val rentalId: String,
+    val paymentStatus: String,
+    val method: String,
+    val totalPrice: Double,
+    val discountAmount: Double,
+    val paidAmount: Double,
+    val walletBalance: Double?,
+    val card: PaidCardSummaryDto?
+)
+
 data class ActiveRentalResponseDto(
     val id: String,
     val userId: String,

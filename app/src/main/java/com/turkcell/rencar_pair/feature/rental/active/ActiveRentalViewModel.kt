@@ -173,7 +173,7 @@ class ActiveRentalViewModel @AssistedInject constructor(
             when (val result = rentalsRepository.finishRental(current.rentalId)) {
                 is AuthResult.Success -> {
                     _state.update { it.copy(isFinishing = false) }
-                    sendEffect(ActiveRentalContract.Effect.NavigateToHome)
+                    sendEffect(ActiveRentalContract.Effect.NavigateToPayment(current.rentalId))
                 }
                 is AuthResult.Error -> {
                     _state.update { it.copy(isFinishing = false) }

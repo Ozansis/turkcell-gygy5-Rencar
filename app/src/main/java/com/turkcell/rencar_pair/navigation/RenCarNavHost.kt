@@ -3,6 +3,7 @@ package com.turkcell.rencar_pair.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -22,6 +23,7 @@ import com.turkcell.rencar_pair.feature.invite.InviteRoute
 import com.turkcell.rencar_pair.feature.maps.detail.VehicleDetailRoute
 import com.turkcell.rencar_pair.feature.onboarding.OnboardingRoute
 import com.turkcell.rencar_pair.feature.rental.active.ActiveRentalRoute
+import com.turkcell.rencar_pair.feature.rental.payment.RentalPaymentRoute
 import com.turkcell.rencar_pair.feature.rental.photos.VehiclePhotosRoute
 import com.turkcell.rencar_pair.feature.rental.reservation.ReservationConfirmationRoute
 import com.turkcell.rencar_pair.feature.settings.SettingsRoute
@@ -38,9 +40,11 @@ private object RenCarDestinations {
     const val SELFIE_VERIFICATION = "selfie-verification"
     const val CONFIRMATION = "confirmation"
     const val HOME = "home"
+    const val HOME_HISTORY = "home-history"
     const val VEHICLE_DETAIL = "vehicle-detail/{vehicleId}/{distanceMeters}"
     const val RESERVATION_CONFIRMATION = "reservation-confirmation/{vehicleId}"
     const val RENTAL_ACTIVE = "rental-active/{rentalId}"
+    const val RENTAL_PAYMENT = "rental-payment/{rentalId}"
     const val VEHICLE_PHOTOS = "vehicle-photos/{rentalId}/{vehicleId}"
     const val HISTORY_DETAIL = "history-detail/{rentalId}"
     const val SETTINGS = "settings"
@@ -51,6 +55,7 @@ private object RenCarDestinations {
     fun vehicleDetailRoute(vehicleId: String, distanceMeters: Int) = "vehicle-detail/$vehicleId/$distanceMeters"
     fun reservationConfirmationRoute(vehicleId: String) = "reservation-confirmation/$vehicleId"
     fun rentalActiveRoute(rentalId: String) = "rental-active/$rentalId"
+    fun rentalPaymentRoute(rentalId: String) = "rental-payment/$rentalId"
     fun vehiclePhotosRoute(rentalId: String, vehicleId: String) = "vehicle-photos/$rentalId/$vehicleId"
     fun historyDetailRoute(rentalId: String) = "history-detail/$rentalId"
     fun inviteRoute(referralCode: String) = "invite/$referralCode"
@@ -213,31 +218,11 @@ fun RenCarNavHost() {
         }
 
         composable(RenCarDestinations.HOME) {
-            MainScaffold(
-                onNavigateToVehicleDetail = { vehicleId, distanceMeters ->
-                    navController.navigate(RenCarDestinations.vehicleDetailRoute(vehicleId, distanceMeters))
-                },
-                onNavigateToActiveRental = { rentalId ->
-                    navController.navigate(RenCarDestinations.rentalActiveRoute(rentalId))
-                },
-                onNavigateToHistoryDetail = { rentalId ->
-                    navController.navigate(RenCarDestinations.historyDetailRoute(rentalId))
-                },
-                onNavigateToSettings = {
-                    navController.navigate(RenCarDestinations.SETTINGS)
-                },
-                onNavigateToHelp = {
-                    navController.navigate(RenCarDestinations.HELP)
-                },
-                onNavigateToInvite = { referralCode ->
-                    navController.navigate(RenCarDestinations.inviteRoute(referralCode))
-                },
-                onNavigateToLogin = {
-                    navController.navigate(RenCarDestinations.LOGIN) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
-            )
+            HomeGraph(navController = navController, startTab = BottomNavItem.Map)
+        }
+
+        composable(RenCarDestinations.HOME_HISTORY) {
+            HomeGraph(navController = navController, startTab = BottomNavItem.History)
         }
 
         composable(RenCarDestinations.SETTINGS) {
@@ -317,8 +302,23 @@ fun RenCarNavHost() {
             val rentalId = backStackEntry.arguments?.getString("rentalId").orEmpty()
             ActiveRentalRoute(
                 rentalId = rentalId,
-                onNavigateToHome = {
-                    navController.navigate(RenCarDestinations.HOME) {
+                onNavigateToPayment = { finishedRentalId ->
+                    navController.navigate(RenCarDestinations.rentalPaymentRoute(finishedRentalId)) {
+                        popUpTo(RenCarDestinations.HOME)
+                    }
+                }
+            )
+        }
+
+        composable(
+            route     = RenCarDestinations.RENTAL_PAYMENT,
+            arguments = listOf(navArgument("rentalId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val rentalId = backStackEntry.arguments?.getString("rentalId").orEmpty()
+            RentalPaymentRoute(
+                rentalId = rentalId,
+                onNavigateToHistory = {
+                    navController.navigate(RenCarDestinations.HOME_HISTORY) {
                         popUpTo(RenCarDestinations.HOME) { inclusive = true }
                     }
                 }
@@ -346,4 +346,34 @@ fun RenCarNavHost() {
             )
         }
     }
+}
+
+@Composable
+private fun HomeGraph(navController: NavHostController, startTab: BottomNavItem) {
+    MainScaffold(
+        startTab = startTab,
+        onNavigateToVehicleDetail = { vehicleId, distanceMeters ->
+            navController.navigate(RenCarDestinations.vehicleDetailRoute(vehicleId, distanceMeters))
+        },
+        onNavigateToActiveRental = { rentalId ->
+            navController.navigate(RenCarDestinations.rentalActiveRoute(rentalId))
+        },
+        onNavigateToHistoryDetail = { rentalId ->
+            navController.navigate(RenCarDestinations.historyDetailRoute(rentalId))
+        },
+        onNavigateToSettings = {
+            navController.navigate(RenCarDestinations.SETTINGS)
+        },
+        onNavigateToHelp = {
+            navController.navigate(RenCarDestinations.HELP)
+        },
+        onNavigateToInvite = { referralCode ->
+            navController.navigate(RenCarDestinations.inviteRoute(referralCode))
+        },
+        onNavigateToLogin = {
+            navController.navigate(RenCarDestinations.LOGIN) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    )
 }

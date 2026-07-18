@@ -2,6 +2,8 @@ package com.turkcell.rencar_pair.data.network
 
 import com.turkcell.rencar_pair.data.network.dto.ActiveRentalResponseDto
 import com.turkcell.rencar_pair.data.network.dto.CreateRentalDto
+import com.turkcell.rencar_pair.data.network.dto.PayRentalDto
+import com.turkcell.rencar_pair.data.network.dto.PayRentalResponseDto
 import com.turkcell.rencar_pair.data.network.dto.RentalPhotosStateDto
 import com.turkcell.rencar_pair.data.network.dto.RentalResponseDto
 import com.turkcell.rencar_pair.data.network.dto.RentalStatsResponseDto
@@ -36,6 +38,9 @@ interface RentalsApiService {
 
     @POST("rentals/{id}/finish")
     suspend fun finishRental(@Path("id") id: String): Response<RentalResponseDto>
+
+    @POST("rentals/{id}/pay")
+    suspend fun payRental(@Path("id") id: String, @Body body: PayRentalDto): Response<PayRentalResponseDto>
 
     @Multipart
     @POST("rentals/{id}/photos")
