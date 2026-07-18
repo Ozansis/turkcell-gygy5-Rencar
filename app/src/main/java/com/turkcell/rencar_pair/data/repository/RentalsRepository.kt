@@ -5,6 +5,8 @@ import android.net.Uri
 import com.turkcell.rencar_pair.data.network.RentalsApiService
 import com.turkcell.rencar_pair.data.network.dto.ActiveRentalResponseDto
 import com.turkcell.rencar_pair.data.network.dto.CreateRentalDto
+import com.turkcell.rencar_pair.data.network.dto.PayRentalDto
+import com.turkcell.rencar_pair.data.network.dto.PayRentalResponseDto
 import com.turkcell.rencar_pair.data.network.dto.RentalPhotosStateDto
 import com.turkcell.rencar_pair.data.network.dto.RentalResponseDto
 import com.turkcell.rencar_pair.data.network.dto.RentalStatsResponseDto
@@ -97,6 +99,20 @@ class RentalsRepository @Inject constructor(
     suspend fun finishRental(id: String): AuthResult<RentalResponseDto> {
         return try {
             val response = rentalsApiService.finishRental(id)
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                AuthResult.Success(body)
+            } else {
+                AuthResult.Error(response.code(), response.extractErrorMessage())
+            }
+        } catch (e: IOException) {
+            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
+        }
+    }
+
+    suspend fun payRental(id: String, method: String, cardId: String?): AuthResult<PayRentalResponseDto> {
+        return try {
+            val response = rentalsApiService.payRental(id, PayRentalDto(method, cardId))
             val body = response.body()
             if (response.isSuccessful && body != null) {
                 AuthResult.Success(body)

@@ -11,7 +11,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 @Composable
 fun ActiveRentalRoute(
     rentalId: String,
-    onNavigateToHome: () -> Unit = {},
+    onNavigateToPayment: (String) -> Unit = {},
     viewModel: ActiveRentalViewModel = hiltViewModel<ActiveRentalViewModel, ActiveRentalViewModel.Factory>(
         creationCallback = { factory -> factory.create(rentalId) }
     )
@@ -22,9 +22,9 @@ fun ActiveRentalRoute(
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
             when (effect) {
-                ActiveRentalContract.Effect.NavigateToHome -> onNavigateToHome()
-                is ActiveRentalContract.Effect.ShowInfo    -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
-                is ActiveRentalContract.Effect.ShowError   -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+                is ActiveRentalContract.Effect.NavigateToPayment -> onNavigateToPayment(effect.rentalId)
+                is ActiveRentalContract.Effect.ShowInfo          -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+                is ActiveRentalContract.Effect.ShowError         -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
             }
         }
     }
