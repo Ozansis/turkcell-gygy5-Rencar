@@ -1880,3 +1880,68 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
 - **Sıradaki adım:** Emülatörü açıp Login ekranında telefon alanına
   `5321234567` yazarak (hem baştan hem araya rakam ekleyerek) imlecin doğru
   konumda kaldığını, aynısını Register ekranında da doğrulamak.
+
+### 2026-07-18 — Maps ekranına "Filtreler" eklendi: çalışan arama çubuğu + segment/vites/koltuk filtre paneli (3 dosya)
+
+- **Ne yapıldı:** Kullanıcının "haritadaki arama çubuğu çalışmıyor" şikayeti araştırılırken
+  `SearchBar()`'ın (`MapsScreen.kt`) tamamen dekoratif olduğu (parametre almıyor, `onIntent`'e
+  hiç bağlı değil) ve `NearbyVehiclesSheet` içinde de aynı amaçla ikinci, boş (`onClick = {}`)
+  bir Tune ikonu daha olduğu bulundu. Kullanıcı konum/adres aramayı (backend'de geocoding
+  endpoint'i yok) kapsam dışı bırakıp yalnızca araç filtrelemeyi istedi. Eklenenler:
+  (1) arama çubuğu artık gerçek bir `BasicTextField` — marka/model/plaka'ya göre canlı filtreliyor;
+  (2) her iki Tune ikonu da aynı `FilterPanelToggled` intent'ine bağlandı (tekrar eden ölü kod
+  birleştirildi); (3) `VehicleTypeFilterRow`'un altında segment (Ekonomik/Konfor/SUV — backend
+  enum'ı), vites (backend'de sabit enum YOK, bu yüzden uydurulmadı — yüklenen araç listesinden
+  `distinct()` ile dinamik çıkarılıyor) ve min. koltuk (2+/4+/5+/7+ sayısal eşik) chip satırlarından
+  oluşan yeni bir `ExtraFiltersPanel` eklendi, + "Filtreleri temizle" butonu.
+- **Değişen dosyalar:** `feature/maps/MapsContract.kt` (`VehicleSegment` enum; `NearbyVehicle.segment`;
+  `State`'e `searchQuery`/`selectedSegment`/`selectedTransmission`/`selectedMinSeats`/
+  `isFilterPanelExpanded`; `filteredVehicles` getter'ı tüm kriterlere göre genişletildi;
+  `availableTransmissions`/`activeExtraFilterCount` computed property'leri), `feature/maps/MapsViewModel.kt`
+  (6 yeni Intent dalı + `handle*` fonksiyonları; `toNearbyVehicle()` artık `segment`'i de parse ediyor),
+  `feature/maps/MapsScreen.kt` (`SearchBar` stateful oldu; `ExtraFiltersPanel`/`SelectableChip`/
+  `FilterSectionLabel` composable'ları eklendi; `VehicleTypeFilterRow` yeni `SelectableChip`
+  helper'ını kullanacak şekilde sadeleştirildi).
+- **Neden bu şekilde yapıldı:** `NearbyVehicle.segment`'e `= VehicleSegment.ECONOMY` varsayılan
+  değeri verildi — `VehicleDetailScreen.kt` ve `ActiveRentalScreen.kt`'deki `toMapVehicle()` benzeri
+  fonksiyonlar da aynı `NearbyVehicle` tipini tek-marker mini-harita için üretiyor ama segment'i hiç
+  göstermiyor/filtrelemiyor; bu iki ekranın `Contract.State`'ine sadece derleme geçsin diye alakasız
+  bir alan eklemek (7 dosyaya çıkıp onaylanan 5 dosya/3 dosya kapsamını aşardı) kapsam dışı olurdu —
+  Maps ekranının kendi `toNearbyVehicle()` eşlemesi gerçek değeri zaten her zaman açıkça set ediyor.
+  Vites filtresi için sabit bir Türkçe etiket seti (ör. "Manuel"/"Otomatik") YAZILMADI çünkü backend
+  şemasında (`openapi.json`) `transmission` sabit bir enum değil serbest `String` — Agent.md §2.2
+  (uydurma yasağı) gereği değerler tahmin edilmedi, bunun yerine `State.availableTransmissions`
+  yüklenen gerçek veriden türetiliyor.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi. İlk denemede iki hata
+  çıktı: (1) `import androidx.compose.foundation.layout.weight` yanlış/internal bir sembolü
+  çekiyordu ("Cannot access ... it is internal in file") — kaldırıldı, `Modifier.weight()` zaten
+  Row/Column scope'unda import gerektirmeden çözülüyor; (2) `NearbyVehicle`'a `segment` eklenince
+  `VehicleDetailScreen.kt`/`ActiveRentalScreen.kt`'deki mevcut `NearbyVehicle(...)` çağrıları
+  parametre eksikliğinden derlemeyi kırdı — yukarıdaki varsayılan değerle çözüldü. İkisi de
+  düzeltildikten sonra BUILD SUCCESSFUL (yalnızca projede önceden var olan, ilgisiz uyarılar).
+  Bağlı bir emülatör/cihaz olmadığından cihazda görsel/runtime testi (arama kutusuna yazınca
+  listenin filtrelenmesi, Tune ikonlarının paneli aç/kapa yapması) YAPILAMADI.
+- **Sıradaki adım:** Emülatörde Haritalar ekranını açıp arama kutusuna bir marka/model/plaka
+  yazarak listenin filtrelendiğini, üstteki ve alttaki Tune ikonlarının aynı paneli aç/kapa
+  yaptığını, segment/vites/min. koltuk chip'lerinin doğru filtrelediğini ve "Filtreleri temizle"nin
+  tüm ek filtreleri sıfırladığını doğrulamak.
+
+### 2026-07-18 — Filtre sonucu boşsa uyarı mesajı eklendi (Maps, 1 dosya)
+
+- **Ne yapıldı:** Bir önceki batch'teki filtre panelinde, seçilen kriterlere (arama metni/tip/
+  segment/vites/min. koltuk) uyan hiç araç kalmadığında ekranın sessizce "Yakınında 0 araç"
+  yazıp boş bir liste göstermesi kullanıcı isteğiyle iyileştirildi. `NearbyVehiclesSheet` içine,
+  `state.filteredVehicles` boşsa gösterilen yeni bir `EmptyFilterResult()` composable'ı (arama
+  ikonu + "Bu özelliklerde araç yok, tekrar deneyin" metni) eklendi. Ayrıca aynı durumda
+  "En Yakın Aracı Bul" butonu da devre dışı bırakıldı (`enabled` koşuluna
+  `state.filteredVehicles.isNotEmpty()` eklendi) — boş sonuçla bu butona basmanın anlamı yoktu.
+- **Değişen dosyalar:** `feature/maps/MapsScreen.kt`
+- **Neden bu şekilde yapıldı:** Contract/ViewModel'e dokunulmadı — `filteredVehicles` zaten
+  var olan bir computed property, ekranın kendisi boş durumu doğrudan bu değerden okuyabiliyor;
+  yeni bir State alanı (ör. `isEmptyResult: Boolean`) eklemek gereksiz bir türetilmiş alan
+  olurdu (mvi-contracts.md'nin "UI'da hesaplanan türetilmiş değerler State alanı değil,
+  computed property olarak tanımlanır" kuralına aykırı düşerdi).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD SUCCESSFUL,
+  yeni uyarı yok. Bağlı emülatör olmadığından (tüm filtrelerin eşleşmediği bir kombinasyon
+  seçilip mesajın göründüğü, "En Yakın Aracı Bul"un devre dışı kaldığı) runtime testi
+  YAPILAMADI.
