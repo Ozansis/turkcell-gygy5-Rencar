@@ -1,5 +1,7 @@
 package com.turkcell.rencar_pair.navigation
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -52,8 +56,19 @@ fun MainScaffold(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val context = LocalContext.current
 
-    var hasLocationPermission by remember { mutableStateOf(false) }
+    // Gerçek izin durumuyla başlatılır — sabit false, bu ekran (kardeş rotalardan dönüşte
+    // olduğu gibi) yeniden kurulduğunda izin zaten verilmiş olsa dahi alt sekmelerin
+    // "izin ver" uyarısıyla yanlışlıkla tekrar bloke edilmesine yol açıyordu.
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED
+        )
+    }
     var permissionRequestTrigger by remember { mutableIntStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()

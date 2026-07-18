@@ -48,6 +48,10 @@ class MapsViewModel @Inject constructor(
             is MapsContract.Intent.LocationChanged          -> handleLocationChanged(intent.location)
             MapsContract.Intent.LocationPermissionGranted    -> handleLocationPermissionGranted()
             MapsContract.Intent.LocationPermissionDenied     -> handleLocationPermissionDenied()
+            MapsContract.Intent.LocationServicesEnabled      -> handleLocationServicesEnabled()
+            MapsContract.Intent.LocationServicesDisabled     -> handleLocationServicesDisabled()
+            MapsContract.Intent.PermissionRequestRetryClicked -> sendEffect(MapsContract.Effect.RequestLocationPermission)
+            MapsContract.Intent.EnableLocationServicesClicked -> sendEffect(MapsContract.Effect.RequestEnableLocationServices)
             is MapsContract.Intent.TypeFilterSelected        -> handleTypeFilterSelected(intent.type)
             is MapsContract.Intent.SearchQueryChanged        -> handleSearchQueryChanged(intent.value)
             is MapsContract.Intent.SegmentFilterSelected     -> handleSegmentFilterSelected(intent.segment)
@@ -123,6 +127,14 @@ class MapsViewModel @Inject constructor(
     private fun handleLocationPermissionDenied() {
         _state.update { it.copy(hasLocationPermission = false) }
         sendEffect(MapsContract.Effect.ShowLocationPermissionDeniedMessage)
+    }
+
+    private fun handleLocationServicesEnabled() {
+        _state.update { it.copy(isLocationServiceEnabled = true) }
+    }
+
+    private fun handleLocationServicesDisabled() {
+        _state.update { it.copy(isLocationServiceEnabled = false) }
     }
 
     private fun handleTypeFilterSelected(type: VehicleType?) {

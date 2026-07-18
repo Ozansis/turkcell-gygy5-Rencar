@@ -1945,3 +1945,104 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   yeni uyarı yok. Bağlı emülatör olmadığından (tüm filtrelerin eşleşmediği bir kombinasyon
   seçilip mesajın göründüğü, "En Yakın Aracı Bul"un devre dışı kaldığı) runtime testi
   YAPILAMADI.
+
+### 2026-07-18 — Konum izni akışındaki iki hata düzeltildi (Maps ekranı, 5 dosya)
+
+- **Ne yapıldı:** Kullanıcının bildirdiği iki ayrı şikayet araştırıldı: (1) "izin verdim ama
+  konumu bulamıyor, telefondan konumu açman gerekiyor" — kök neden, uygulamanın yalnızca
+  runtime *iznini* kontrol edip cihazın konum servisinin (GPS/Ağ) fiilen açık olup olmadığını
+  hiç sorgulamaması; kapalıyken `fusedClient` sessizce `null` dönüyor, kullanıcı ayarlara
+  elle gitmek zorunda kalıyordu. Çözüm: `SettingsClient.checkLocationSettings()` ile durum
+  sorgulanıyor, kapalıysa `ResolvableApiException` üzerinden sistemin "Konumu Aç" diyaloğu
+  uygulama içinden (`StartIntentSenderForResult`) açtırılıyor; ayrıca `LocationManager
+  .PROVIDERS_CHANGED_ACTION` yayını dinlenerek kullanıcı konumu hızlı ayarlardan açtığında
+  ekran otomatik haberdar oluyor. (2) "izin versem de sayfalar arasında tekrar tekrar
+  soruyor" — kök neden, `MainScaffold.kt`'deki `hasLocationPermission`'ın sabit `false` ile
+  başlatılması; `HOME` tek bir üst düzey `composable` olduğundan (`RenCarNavHost.kt`)
+  VehicleDetail/Settings/Help/Invite/HistoryDetail/RentalActive/VehiclePhotos gibi kardeş
+  ekranlardan dönüşte `MainScaffold` komposizyonu sıfırdan kuruluyor ve izin zaten verilmiş
+  olsa bile bir an için `false` görünüp alt sekmelerde yanlışlıkla "izin ver" snackbar'ı tekrar
+  tetikleniyordu; artık gerçek `ContextCompat.checkSelfPermission` sonucuyla başlatılıyor.
+  Ayrıca kullanıcının istediği şekilde, Haritalar ekranında izin/konum servisi onaylanana kadar
+  ekranın üstünde kalan engelleyici bir `LocationRequiredOverlay` eklendi (`MapsScreen.kt`) —
+  sistem diyaloğu reddedilse/kapatılsa da harita "bozuk" görünmüyor, yeniden deneme butonu
+  gösteriliyor.
+- **Değişen dosyalar:** `feature/maps/MapsContract.kt` (`State.isLocationServiceEnabled`;
+  `Intent.LocationServicesEnabled/Disabled`, `PermissionRequestRetryClicked`,
+  `EnableLocationServicesClicked`; `Effect.RequestLocationPermission`,
+  `Effect.RequestEnableLocationServices`), `feature/maps/MapsViewModel.kt` (yeni intent
+  dalları + `handleLocationServicesEnabled/Disabled`), `feature/maps/MapsRoute.kt`
+  (`checkLocationSettings()` yardımcı fonksiyonu, `enableLocationServicesLauncher`,
+  `PROVIDERS_CHANGED_ACTION` `BroadcastReceiver`'ı, yeni effect dalları),
+  `feature/maps/MapsScreen.kt` (`LocationRequiredOverlay` composable'ı), `navigation/
+  MainScaffold.kt` (`hasLocationPermission` başlangıç değeri gerçek izin kontrolünden okunuyor).
+- **Neden bu şekilde yapıldı:** Yeni bağımlılık eklenmedi — `SettingsClient`/
+  `LocationSettingsRequest`/`ResolvableApiException` zaten mevcut
+  `play-services-location:21.4.0` içinde geliyor. Mevcut `hasLocationPermission`/
+  `LocationPermissionGranted` deseniyle birebir tutarlı olması için konum servisi durumu da
+  aynı State/Intent/Effect üçlüsüne (mvi-contracts.md) eklendi; ayrı bir servis/yardımcı sınıf
+  açılmadı çünkü mantık zaten `MapsRoute.kt`'nin sorumluluğunda olan Android API çağrılarıyla
+  (permission launcher, activity result) aynı katmanda.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile temiz derleme (`--rerun`) yapıldı,
+  BUILD SUCCESSFUL, bu değişiklikle ilgili yeni uyarı yok (yalnızca projede önceden var olan,
+  ilgisiz 3 uyarı). Bağlı emülatör/cihaz olmadığından (`adb` bu ortamda kurulu değil) izin
+  reddetme/kabul etme, konum servisini kapatıp açma ve kardeş ekranlar arasında gidip gelme
+  senaryolarının runtime testi YAPILAMADI — bir sonraki oturumda cihazda elle doğrulanmalı.
+
+### 2026-07-18 — Harita ilk açılışta konuma değil araç kümesine odaklanabiliyordu, düzeltildi (1 dosya)
+
+- **Ne yapıldı:** Kullanıcı "izin verir vermez harita konumuma odaklanıyor değil mi, ilk orayı
+  görüyorum" diye sordu; kod incelenince `RencarMap.kt`'deki tek seferlik ilk kare mantığının
+  (`hasFramedInitialView`) bunu garanti etmediği görüldü: `vehicles` listesi (`MapsViewModel
+  .init`'te) konum izninden bağımsız hemen yüklendiğinden, GPS fix'i gelmeden önce vehicles
+  değişirse kamera `myLocation + vehicles` sınır kutusuna (bounds) göre kilitleniyor ve konum
+  birazdan gelse bile kamera bir daha oynamıyordu — kullanıcı ilk açılışta kendi konumu yerine
+  araçların bulunduğu bölgeyi görebiliyordu. Düzeltme: ilk kare artık `myLocation` geldiği an
+  SADECE ona zum yapıyor (zoom 15.0); araç sınır kutusuna düşme yalnızca 2 saniye içinde konum
+  hiç gelmezse (izin reddedildi/GPS kapalı) devreye giren bir yedek haline getirildi.
+- **Değişen dosyalar:** `feature/maps/RencarMap.kt` (ilk kare `LaunchedEffect`'i ikiye
+  ayrıldı: konum-öncelikli anlık kare + 2 sn'lik gecikmeli araç-kümesi yedeği; `kotlinx.coroutines
+  .delay` importu eklendi).
+- **Neden bu şekilde yapıldı:** Kullanıcı açıkça "önce bana odaklan, sonra araçları göster"
+  seçeneğini onayladı (araçlarla birlikte geniş görünüme yumuşak geçiş seçeneği yerine).
+  Ayrı bir Contract/State alanı eklenmedi — bu tamamen `RencarMap`'in kendi iç kamera mantığı,
+  MVI State'e yansıtılacak bir kullanıcı-görünür durum değil.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD SUCCESSFUL, yeni
+  uyarı yok. Bağlı emülatör/cihaz olmadığından (bu ortamda `adb` kurulu değil) konum gelişinin
+  gerçekten önce/tek başına kareye alındığı, araçların artık kameranın odağını bozmadığı ve
+  izin reddedilince 2 sn sonra araç kümesine düşüldüğü runtime'da GÖRSEL OLARAK DOĞRULANAMADI —
+  bir sonraki oturumda cihazda: (a) konum + araçlar aynı anda yüklüyken haritanın kullanıcıya
+  zum yaptığı, (b) izin reddedilince ~2 sn sonra araç kümesine düşüldüğü elle test edilmeli.
+
+### 2026-07-18 — Araç-kümesi yedeği hâlâ konumdan önce tetikleniyordu, sabit 2sn yerine duruma göre bekleme eklendi (2 dosya)
+
+- **Ne yapıldı:** Bir önceki batch'teki düzeltme (2sn'lik sabit gecikme) yeterli değildi:
+  kullanıcı "kendi konumumu ilk göremiyorum, araçları çok çabuk getiriyor olabilir misin"
+  diye bildirdi. Kök neden: gerçek bir GPS fix (özellikle soğuk başlangıçta/yüksek doğruluk
+  modunda) 2 saniyeden uzun sürebiliyor; bu durumda 2sn'lik yedek zamanlayıcı `myLocation`
+  gelmeden ateşleniyor, kamera araç sınır kutusuna kilitleniyor ve konum birazdan gelse bile
+  (`hasFramedInitialView` artık true olduğundan) kamera bir daha oynamıyordu — yani konum her
+  zaman "araçlara yenik düşüyordu". Düzeltme: `RencarMap`'e `canObtainLocation: Boolean` adında
+  yeni bir parametre eklendi. Haritalar ekranı bunu `state.hasLocationPermission &&
+  state.isLocationServiceEnabled` olarak geçiyor: konum gerçekten gelebilecek durumdaysa yedek
+  zamanlayıcı artık sabit 2sn yerine 8sn bekliyor (gerçekçi bir GPS fix süresi) ve `myLocation`
+  gelirse zaten iptal oluyor; konum hiç gelemeyecek durumdaysa (izin yok/servis kapalı) yedek
+  hâlâ anında devreye giriyor. Parametrenin varsayılanı `false` — VehicleDetail/ActiveRental
+  mini-haritaları (tek seferlik/sessiz konum okuyan, sürekli GPS akışı olmayan ekranlar)
+  hiçbir gecikme olmadan doğrudan araç konumuna kareleniyor, eski davranışları korunuyor.
+- **Değişen dosyalar:** `feature/maps/RencarMap.kt` (`canObtainLocation` parametresi; yedek
+  `LaunchedEffect`'in `delay` süresi duruma göre 0/8000ms), `feature/maps/MapsScreen.kt`
+  (`RencarMap` çağrısına `canObtainLocation = state.hasLocationPermission &&
+  state.isLocationServiceEnabled` eklendi).
+- **Neden bu şekilde yapıldı:** Sabit bir gecikme süresini büyütmek (ör. 2sn yerine 5sn) yine
+  tahmini bir sayı olurdu ve GPS fix bazen ondan da uzun sürebilir; asıl doğru sinyal zaten
+  ekranın kendisinde mevcuttu (`hasLocationPermission`/`isLocationServiceEnabled`) — bu yüzden
+  zamanlayıcıyı büyütmek yerine "konum gelecek mi, gelmeyecek mi" bilgisini doğrudan `RencarMap`'e
+  taşımak tercih edildi. `VehicleDetailScreen.kt`/`ActiveRentalScreen.kt` çağrılarına
+  dokunulmadı — parametrenin varsayılan değeri onların mevcut (gecikmesiz) davranışını
+  bozmadan koruyor.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD SUCCESSFUL, yeni
+  uyarı yok. Bağlı emülatör/cihaz olmadığından (`adb` kurulu değil) GPS fix'in gerçekten 8sn
+  içinde gelip kamerayı konuma kilitlediği, izin reddedilince hâlâ anında araçlara düşüldüğü ve
+  VehicleDetail/ActiveRental mini-haritalarının davranışının değişmediği runtime'da
+  DOĞRULANAMADI — bir sonraki oturumda cihazda/emülatörde test edilmeli.
