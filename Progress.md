@@ -2160,6 +2160,60 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   BUILD SUCCESSFUL. Yeni dosyalar henüz hiçbir ViewModel'den çağrılmadığından
   runtime/network testi yapılmadı (Wallet altyapı batch'iyle tutarlı olarak
   sonraki batch'e bırakıldı).
+
+### 2026-07-18 — WalletViewModel/Route/Screen gerçek API'ye bağlandı (4 dosya)
+
+- **Ne yapıldı:** Cüzdan ekranı, önceki iki batch'te kurulan ama hiçbir
+  yerden çağrılmayan `WalletRepository`/`CardsRepository`'ye uçtan uca
+  bağlandı. `WalletViewModel` artık `@HiltViewModel` +
+  `@Inject constructor(WalletRepository, CardsRepository)`; açılışta
+  `coroutineScope { async {...}; async {...} }` (SplashViewModel'deki
+  paralel-çağrı deseni, min-delay'siz) ile `GET /wallet` +
+  `GET /cards` paralel çağrılıyor. "Bakiye Yükle" artık gerçek bir
+  `ModalBottomSheet` (10-5000 TL client-side doğrulama, `POST /wallet/topup`,
+  dönen `WalletResponseDto` doğrudan state'e yazılıyor). "+ Ekle" artık
+  gerçek bir `ModalBottomSheet` (VISA/MASTERCARD `FilterChip` seçimi +
+  last4 + ay/yıl, `YearMonth` ile geçmiş SKT reddi, `POST /cards`). Bir
+  karta tıklamak `PATCH /cards/{id}/default` çağırıyor; yeni eklenen bir
+  silme ikonu `DELETE /cards/{id}` çağırıp SONRASINDA `listCards()` ile
+  listeyi yeniden çekiyor (yerel "isDefault tahmini" YOK).
+  `WalletRoute.kt` eski `viewModel()` yerine `hiltViewModel()` kullanıyor.
+  `WalletMockSource.kt` artık hiçbir yerden çağrılmıyor ama
+  `HistoryMockSource`/`ProfileMockSource` kararıyla tutarlı olarak
+  SİLİNMEDİ.
+- **Değişen dosyalar:** `feature/wallet/WalletContract.kt`,
+  `feature/wallet/WalletViewModel.kt`, `feature/wallet/WalletRoute.kt`,
+  `feature/wallet/WalletScreen.kt`.
+- **Neden bu şekilde yapıldı:** `CardType` enum'ına `OTHER` eklendi;
+  backend'in `brand` alanı `String` olduğundan hem `WalletViewModel
+  .toSavedCard()`'daki hem de `WalletScreen.CardTypeIcon`'daki
+  `when (brand)`/`when (type)` blokları artık exhaustive bir `else`/`OTHER`
+  dalına sahip — kullanıcının işaretlediği "bilinmeyen marka çökmesin"
+  riski böyle kapatıldı. `State`'e `errorMessage`/`isTopupSubmitting`/
+  `isAddCardSubmitting` eklendi; hata gösterimi History/Profile'daki kalıcı
+  `State.errorMessage` deseniyle tutarlı (ayrı bir `ShowError` Effect'i
+  yok). Sheet'lerin başarı sonrası otomatik kapanması yeni bir `Close*`
+  Effect'i ile YAPILMADI — `mvi-contracts.md` Effect isimlerinin yalnızca
+  `Navigate`/`Show` prefixiyle başlamasını zorunlu kılıyor; bunun yerine
+  Route'ta `isTopupSubmitting`/`isAddCardSubmitting`'in `true→false`
+  geçişini (önceki değer `remember` ile izlenerek) `errorMessage == null`
+  koşuluyla birlikte kontrol eden bir `LaunchedEffect` sheet'i kapatıyor.
+  `AddBalanceSheet`/`AddCardSheet`, `WalletScreen.kt` içinde `private`
+  DEĞİL tanımlandı çünkü `WalletRoute.kt` (aynı paket, farklı dosya) bunları
+  çağırıyor — Kotlin'de `private` üst düzey bildirim dosya kapsamıyla
+  sınırlı. `addCard`/`setDefaultCard` sonrası ekstra bir `GET /cards`
+  YOK (dönen veri zaten kesin); yalnızca `deleteCard` sonrası tam liste
+  yenileniyor çünkü backend'in yeni varsayılanı hangi karta atadığı
+  istemci tarafından tahmin edilemez. Kart silme için onay diyaloğu
+  eklenmedi (istenmedi).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (tek denemede, yeni uyarı yok). `grep -r WalletMockSource
+  app/src/main/java` ile dosyanın artık yalnızca kendi tanımında geçtiği
+  (hiçbir çağıran kalmadığı) doğrulandı. Bağlı emülatör/cihaz olmadığından
+  (`adb` kurulu değil) runtime testi (cüzdan açılışta gerçek bakiye/kart
+  verisiyle dolması, "Bakiye Yükle"/"+ Ekle" sheet'lerinin doğrulama ve
+  API çağrısı akışı, kart silme sonrası varsayılanın doğru yeniden
+  çekilmesi) YAPILAMADI — bir sonraki oturumda cihazda elle doğrulanmalı.
 - **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
   BUILD SUCCESSFUL. Yeni dosyalar henüz hiçbir ViewModel'den çağrılmadığından
   runtime/network testi yapılmadı (Auth/Vehicles altyapı batch'leriyle

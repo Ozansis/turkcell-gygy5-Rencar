@@ -11,43 +11,72 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.turkcell.rencar_pair.ui.theme.Blue400
 import com.turkcell.rencar_pair.ui.theme.Blue500
+import java.time.YearMonth
 
 private val GreenPositive = Color(0xFF16A34A)
 private val RedNegative   = Color(0xFFDC2626)
 private val VisaBlue      = Color(0xFF1A56DB)
 private val McRed         = Color(0xFFDC2626)
+private val OtherGray     = Color(0xFF6B7280)
 
 @Composable
 fun WalletScreen(
     state: WalletContract.State,
     onIntent: (WalletContract.Intent) -> Unit
 ) {
+    if (state.isLoading) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        }
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -60,6 +89,16 @@ fun WalletScreen(
             color    = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp)
         )
+
+        state.errorMessage?.let { message ->
+            Text(
+                text     = message,
+                style    = MaterialTheme.typography.bodySmall,
+                color    = RedNegative,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(Modifier.height(12.dp))
+        }
 
         BalanceCard(
             formattedBalance = state.formattedBalance,
@@ -79,8 +118,9 @@ fun WalletScreen(
 
         state.savedCards.forEach { card ->
             SavedCardRow(
-                card    = card,
-                onClick = { onIntent(WalletContract.Intent.CardSelected(card.id)) }
+                card     = card,
+                onClick  = { onIntent(WalletContract.Intent.CardSelected(card.id)) },
+                onDelete = { onIntent(WalletContract.Intent.CardDeleteRequested(card.id)) }
             )
             Spacer(Modifier.height(8.dp))
         }
@@ -189,7 +229,8 @@ private fun SectionHeader(
 @Composable
 private fun SavedCardRow(
     card: SavedCard,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Surface(
         modifier        = Modifier
@@ -228,6 +269,15 @@ private fun SavedCardRow(
 
             if (card.isDefault) {
                 DefaultBadge()
+                Spacer(Modifier.width(8.dp))
+            }
+
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector        = Icons.Default.Delete,
+                    contentDescription = "Kartı sil",
+                    tint               = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -236,8 +286,9 @@ private fun SavedCardRow(
 @Composable
 private fun CardTypeIcon(type: CardType) {
     val (bgColor, label) = when (type) {
-        CardType.VISA -> VisaBlue to "VISA"
-        CardType.MC   -> McRed   to "MC"
+        CardType.VISA  -> VisaBlue  to "VISA"
+        CardType.MC    -> McRed    to "MC"
+        CardType.OTHER -> OtherGray to "KART"
     }
 
     Box(
@@ -339,4 +390,181 @@ private fun formatTransactionAmount(tx: WalletTransaction): String {
     val intPart = cents / 100
     val decPart = cents % 100
     return "$sign₺$intPart,${decPart.toString().padStart(2, '0')}"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddBalanceSheet(
+    isSubmitting: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (Double) -> Unit
+) {
+    var amountText by remember { mutableStateOf("") }
+    val amount = amountText.toDoubleOrNull()
+    val isAmountValid = amount != null && amount in 10.0..5000.0
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp)
+                .navigationBarsPadding()
+        ) {
+            Text("Bakiye Yükle", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value           = amountText,
+                onValueChange   = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
+                placeholder     = { Text("Tutar (10 - 5000 TL)") },
+                singleLine      = true,
+                isError         = amountText.isNotEmpty() && !isAmountValid,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                shape           = RoundedCornerShape(16.dp),
+                modifier        = Modifier.fillMaxWidth()
+            )
+            if (amountText.isNotEmpty() && !isAmountValid) {
+                Text(
+                    text  = "Tutar 10 ile 5000 TL arasında olmalı.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            errorMessage?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Button(
+                onClick  = { amount?.let(onConfirm) },
+                enabled  = isAmountValid && !isSubmitting,
+                shape    = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier    = Modifier.size(20.dp),
+                        color       = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Yükle")
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddCardSheet(
+    isSubmitting: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (brand: String, last4: String, expMonth: Int, expYear: Int) -> Unit
+) {
+    var brand by remember { mutableStateOf("VISA") }
+    var last4Text by remember { mutableStateOf("") }
+    var expMonthText by remember { mutableStateOf("") }
+    var expYearText by remember { mutableStateOf("") }
+
+    val isLast4Valid = last4Text.length == 4 && last4Text.all { it.isDigit() }
+    val expMonth = expMonthText.toIntOrNull()
+    val expYear  = expYearText.toIntOrNull()
+    val enteredYearMonth = if (expMonth != null && expYear != null) {
+        runCatching { YearMonth.of(expYear, expMonth) }.getOrNull()
+    } else null
+    val isExpiryValid = enteredYearMonth != null && !enteredYearMonth.isBefore(YearMonth.now())
+    val isFormValid = isLast4Valid && isExpiryValid
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp)
+                .navigationBarsPadding()
+        ) {
+            Text("Kart Ekle", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(16.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = brand == "VISA", onClick = { brand = "VISA" }, label = { Text("VISA") })
+                FilterChip(selected = brand == "MASTERCARD", onClick = { brand = "MASTERCARD" }, label = { Text("MASTERCARD") })
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value           = last4Text,
+                onValueChange   = { if (it.length <= 4) last4Text = it.filter(Char::isDigit) },
+                placeholder     = { Text("Son 4 hane") },
+                singleLine      = true,
+                isError         = last4Text.isNotEmpty() && !isLast4Valid,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape           = RoundedCornerShape(16.dp),
+                modifier        = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value           = expMonthText,
+                    onValueChange   = { if (it.length <= 2) expMonthText = it.filter(Char::isDigit) },
+                    placeholder     = { Text("Ay (AA)") },
+                    singleLine      = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape           = RoundedCornerShape(16.dp),
+                    modifier        = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value           = expYearText,
+                    onValueChange   = { if (it.length <= 4) expYearText = it.filter(Char::isDigit) },
+                    placeholder     = { Text("Yıl (YYYY)") },
+                    singleLine      = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape           = RoundedCornerShape(16.dp),
+                    modifier        = Modifier.weight(1f)
+                )
+            }
+            if ((expMonthText.isNotEmpty() || expYearText.isNotEmpty()) && !isExpiryValid) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text  = "Geçerli bir son kullanma tarihi girin (geçmiş olmamalı).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            errorMessage?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Button(
+                onClick  = { if (isFormValid) onConfirm(brand, last4Text, expMonth!!, expYear!!) },
+                enabled  = isFormValid && !isSubmitting,
+                shape    = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier    = Modifier.size(20.dp),
+                        color       = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Kartı Kaydet")
+                }
+            }
+        }
+    }
 }

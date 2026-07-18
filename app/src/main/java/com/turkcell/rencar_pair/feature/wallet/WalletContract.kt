@@ -6,7 +6,10 @@ object WalletContract {
         val balance: Double = 0.0,
         val savedCards: List<SavedCard> = emptyList(),
         val transactions: List<WalletTransaction> = emptyList(),
-        val isLoading: Boolean = false
+        val isLoading: Boolean = false,
+        val errorMessage: String? = null,
+        val isTopupSubmitting: Boolean = false,
+        val isAddCardSubmitting: Boolean = false
     ) {
         val formattedBalance: String get() {
             val cents    = Math.round(balance * 100)
@@ -17,9 +20,17 @@ object WalletContract {
     }
 
     sealed interface Intent {
-        data object AddBalance                          : Intent
-        data object AddCard                            : Intent
-        data class  CardSelected(val cardId: String)   : Intent
+        data object AddBalance                                 : Intent
+        data object AddCard                                    : Intent
+        data class  CardSelected(val cardId: String)            : Intent
+        data class  CardDeleteRequested(val cardId: String)     : Intent
+        data class  TopupConfirmed(val amount: Double)          : Intent
+        data class  AddCardConfirmed(
+            val brand: String,
+            val last4: String,
+            val expMonth: Int,
+            val expYear: Int
+        ) : Intent
     }
 
     sealed interface Effect {
@@ -28,7 +39,7 @@ object WalletContract {
     }
 }
 
-enum class CardType { VISA, MC }
+enum class CardType { VISA, MC, OTHER }
 
 data class SavedCard(
     val id: String,
