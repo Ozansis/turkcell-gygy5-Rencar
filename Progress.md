@@ -2340,3 +2340,37 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   uca akış (Bitir → Ödeme ekranı → Cüzdan/Kart ile öde → Kiralamalarım'a
   düşme, İyzico "yakında" bildirimi, 409 bakiye yetersiz senaryosu) runtime'da
   DOĞRULANAMADI — bir sonraki oturumda cihazda test edilmeli.
+
+### 2026-07-19 — İyzico Checkout Form network/repository altyapısı eklendi
+
+- **Ne yapıldı:** `openapi.json`'daki "Iyzico" tag'i altındaki 8 endpoint'ten
+  yalnızca Checkout Form akışının konusu olan ikisi (`POST
+  /iyzico/checkout-form/initialize`, `GET /iyzico/checkout-form/result/{token}`)
+  için Wallet/Cards altyapı batch'leriyle aynı desende (DTO + ApiService +
+  Repository + NetworkModule) 4 dosyalık bir altyapı katmanı kuruldu. Diğer
+  6 endpoint (doğrudan kart, 3DS, iptal, iade) kullanıcı onayıyla bilinçli
+  olarak kapsam dışı bırakıldı.
+- **Değişen dosyalar (yeni):** `data/network/dto/IyzicoDtos.kt`,
+  `data/network/IyzicoApiService.kt`, `data/repository/IyzicoRepository.kt`.
+  **Değişen dosya:** `di/NetworkModule.kt` (`provideIyzicoApiService` eklendi).
+- **Neden bu şekilde yapıldı:** `InitializeCheckoutFormDto`'nun gerçek
+  şemasındaki `enabledInstallments`/`buyer` alanları kullanıcının açık
+  talimatıyla DTO'ya eklenmedi (Checkout Form akışında ikisi de opsiyonel,
+  backend eksiklerinde otomatik varsayılan kullanıyor). `IyzicoRepository
+  .initializeCheckoutForm`, `basketId` formatını (`rental-<rentalId>`)
+  çağıran tarafın hatırlamasına gerek bırakmadan kendi içinde üretiyor —
+  backend'in `POST /rentals/{id}/pay` doğrulaması bu formatı aradığından
+  (openapi açıklamasında birebir belirtilmiş), bu formatı tek bir yerde
+  garanti altına almak istendi. Şemada `"type": "number"` olan alanlardan
+  parasal olanlar (`price`, `paidPrice`) projede yerleşik olan `Double`
+  kararına (`RentalResponseDto.totalPrice` emsali), sayaç/durum
+  niteliğindeki alanlar (`tokenExpireTime`, `installment`, `fraudStatus`)
+  `CardDtos.kt`'deki `expMonth`/`expYear` kararına (tam sayı, parasal değil)
+  uyacak şekilde `Int` tutuldu. `AuthResult`/`extractErrorMessage`,
+  `AuthRepository.kt` içinde aynı pakette (`data.repository`) zaten
+  tanımlı olduğundan yeniden tanımlanmadı, doğrudan kullanıldı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL, yeni uyarı yok. Yeni dosyalar henüz hiçbir ViewModel'den
+  çağrılmadığından (Wallet/Cards altyapı batch'leriyle tutarlı olarak)
+  runtime/network testi yapılmadı — WebView bileşeni ve Ödeme ekranına
+  bağlama ayrı, sonraki batch'lerin konusu.
