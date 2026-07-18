@@ -16,6 +16,7 @@ import com.turkcell.rencar_pair.feature.auth.login.LoginRoute
 import com.turkcell.rencar_pair.feature.auth.otp.OtpRoute
 import com.turkcell.rencar_pair.feature.auth.register.RegisterRoute
 import com.turkcell.rencar_pair.feature.auth.selfie.SelfieRoute
+import com.turkcell.rencar_pair.feature.history.detail.HistoryDetailRoute
 import com.turkcell.rencar_pair.feature.maps.detail.VehicleDetailRoute
 import com.turkcell.rencar_pair.feature.onboarding.OnboardingRoute
 import com.turkcell.rencar_pair.feature.rental.active.ActiveRentalRoute
@@ -38,12 +39,14 @@ private object RenCarDestinations {
     const val RESERVATION_CONFIRMATION = "reservation-confirmation/{vehicleId}"
     const val RENTAL_ACTIVE = "rental-active/{rentalId}"
     const val VEHICLE_PHOTOS = "vehicle-photos/{rentalId}/{vehicleId}"
+    const val HISTORY_DETAIL = "history-detail/{rentalId}"
 
     fun otpRoute(phoneNumber: String) = "otp/$phoneNumber"
     fun vehicleDetailRoute(vehicleId: String, distanceMeters: Int) = "vehicle-detail/$vehicleId/$distanceMeters"
     fun reservationConfirmationRoute(vehicleId: String) = "reservation-confirmation/$vehicleId"
     fun rentalActiveRoute(rentalId: String) = "rental-active/$rentalId"
     fun vehiclePhotosRoute(rentalId: String, vehicleId: String) = "vehicle-photos/$rentalId/$vehicleId"
+    fun historyDetailRoute(rentalId: String) = "history-detail/$rentalId"
 }
 
 @Composable
@@ -209,6 +212,9 @@ fun RenCarNavHost() {
                 },
                 onNavigateToActiveRental = { rentalId ->
                     navController.navigate(RenCarDestinations.rentalActiveRoute(rentalId))
+                },
+                onNavigateToHistoryDetail = { rentalId ->
+                    navController.navigate(RenCarDestinations.historyDetailRoute(rentalId))
                 }
             )
         }
@@ -229,6 +235,17 @@ fun RenCarNavHost() {
                 onNavigateToReservationConfirmation = { id ->
                     navController.navigate(RenCarDestinations.reservationConfirmationRoute(id))
                 }
+            )
+        }
+
+        composable(
+            route     = RenCarDestinations.HISTORY_DETAIL,
+            arguments = listOf(navArgument("rentalId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val rentalId = backStackEntry.arguments?.getString("rentalId").orEmpty()
+            HistoryDetailRoute(
+                rentalId       = rentalId,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

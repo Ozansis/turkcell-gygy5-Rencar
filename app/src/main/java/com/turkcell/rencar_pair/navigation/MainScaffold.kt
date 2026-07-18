@@ -42,7 +42,8 @@ private val bottomNavItems = listOf(
 @Composable
 fun MainScaffold(
     onNavigateToVehicleDetail: (String, Int) -> Unit = { _, _ -> },
-    onNavigateToActiveRental: (String) -> Unit = {}
+    onNavigateToActiveRental: (String) -> Unit = {},
+    onNavigateToHistoryDetail: (String) -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -129,7 +130,7 @@ fun MainScaffold(
                     permissionRequestTrigger = permissionRequestTrigger
                 )
             }
-            composable(BottomNavItem.History.route)  { HistoryRoute() }
+            composable(BottomNavItem.History.route)  { HistoryRoute(onNavigateToDetail = onNavigateToHistoryDetail) }
             composable(BottomNavItem.Listings.route) { WalletRoute() }
             composable(BottomNavItem.Profile.route)  { ProfileRoute() }
         }
