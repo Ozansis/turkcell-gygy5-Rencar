@@ -75,6 +75,15 @@ fun ProfileScreen(
             onEditClick = { onIntent(ProfileContract.Intent.EditProfileClicked) }
         )
 
+        state.errorMessage?.let { message ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text  = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = RedNegative
+            )
+        }
+
         Spacer(Modifier.height(20.dp))
 
         state.license?.let { license ->
@@ -135,6 +144,9 @@ private fun ProfileHeader(
 
 @Composable
 private fun LicenseCard(license: LicenseVerification) {
+    val accentColor = if (license.isVerified) GreenPositive else MaterialTheme.colorScheme.onSurfaceVariant
+    val titleText = if (license.isVerified) "Ehliyet doğrulandı" else "Ehliyet doğrulanmadı"
+
     Surface(
         modifier        = Modifier.fillMaxWidth(),
         shape           = RoundedCornerShape(16.dp),
@@ -151,13 +163,13 @@ private fun LicenseCard(license: LicenseVerification) {
                 modifier = Modifier
                     .size(42.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(GreenPositive.copy(alpha = 0.12f)),
+                    .background(accentColor.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector        = Icons.Default.VerifiedUser,
                     contentDescription = null,
-                    tint               = GreenPositive,
+                    tint               = accentColor,
                     modifier           = Modifier.size(20.dp)
                 )
             }
@@ -166,14 +178,14 @@ private fun LicenseCard(license: LicenseVerification) {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text       = "Ehliyet doğrulandı",
+                    text       = titleText,
                     style      = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color      = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text  = "${license.licenseClass} · geçerli",
+                    text  = "Sürücü belgesi",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -182,13 +194,13 @@ private fun LicenseCard(license: LicenseVerification) {
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(GreenPositive.copy(alpha = 0.12f))
+                    .background(accentColor.copy(alpha = 0.12f))
                     .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
                 Text(
                     text       = license.statusLabel,
                     style      = MaterialTheme.typography.labelSmall,
-                    color      = GreenPositive,
+                    color      = accentColor,
                     fontWeight = FontWeight.Medium
                 )
             }

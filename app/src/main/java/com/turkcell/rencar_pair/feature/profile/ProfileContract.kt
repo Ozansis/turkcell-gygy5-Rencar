@@ -6,7 +6,8 @@ object ProfileContract {
         val userName: String = "",
         val phoneNumber: String = "",
         val license: LicenseVerification? = null,
-        val isLoading: Boolean = false
+        val isLoading: Boolean = false,
+        val errorMessage: String? = null
     )
 
     sealed interface Intent {
@@ -30,6 +31,5 @@ object ProfileContract {
 
 data class LicenseVerification(
     val isVerified: Boolean,
-    val licenseClass: String,
     val statusLabel: String
 )

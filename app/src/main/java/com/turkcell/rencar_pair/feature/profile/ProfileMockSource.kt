@@ -7,8 +7,7 @@ object ProfileMockSource {
     val phoneNumber = "+90 532 000 00 00"
 
     val license = LicenseVerification(
-        isVerified   = true,
-        licenseClass = "B sınıfı",
-        statusLabel  = "Onaylı"
+        isVerified  = true,
+        statusLabel = "Onaylı"
     )
 }
