@@ -1574,3 +1574,63 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   geçiş, gereksiz yere konum izni şartına bağlanmış.
 - Düzeltme: bu kontrolü kaldırmak (tek satır, MainScaffold.kt).
 - Durum: Ertelendi, bilinçli karar.
+
+### 2026-07-18 — Profil ekranı "Çıkış Yap" akışı gerçek hale getirildi (5 dosya)
+
+- **Ne yapıldı:** `AuthRepository.logout()` artık önce gerçek `POST /auth/logout`'u
+  (`AuthApiService.logout()`) çağırıyor, ardından (API çağrısı başarılı olsun olmasın)
+  `tokenStore.clear()` çalışıyor. `ProfileViewModel` `class : ViewModel()`den `@HiltViewModel`
+  + `@Inject constructor(AuthRepository)`e taşındı; `SignOutClicked` artık yeni
+  `handleSignOutClicked()` içinde `authRepository.logout()`u çağırıp `NavigateToLogin`
+  effect'ini gönderiyor (`ProfileMockSource` kullanan `loadProfile()` ve diğer 5 buton
+  DEĞİŞMEDİ, kapsam dışı). `ProfileRoute.kt` `viewModel()` yerine `hiltViewModel()` kullanıyor,
+  yeni `onNavigateToLogin: () -> Unit = {}` parametresini `NavigateToLogin` effect'ine
+  bağlıyor (diğer 5 effect kasıtlı olarak `-> Unit` kaldı, koda not düşüldü).
+  `MainScaffold.kt`'ye aynı isimde bir parametre eklenip `ProfileRoute`'a aktarıldı.
+  `RenCarNavHost.kt`'nin `HOME` bloğundaki `MainScaffold` çağrısına
+  `onNavigateToLogin = { navController.navigate(LOGIN) { popUpTo(findStartDestination().id)
+  { inclusive = true } } }` eklendi.
+- **Değişen dosyalar:** `data/repository/AuthRepository.kt`, `feature/profile/
+  ProfileViewModel.kt`, `feature/profile/ProfileRoute.kt`, `navigation/MainScaffold.kt`,
+  `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcı onayıyla netleşen karar: backend `POST /auth/logout`
+  çağrısı ağ hatası/timeout/401 nedeniyle başarısız olsa bile `tokenStore.clear()` HER DURUMDA
+  çalışıyor (`try/catch` + `finally`) — kullanıcı bir ağ sorunu yüzünden "çıkış yapamama"
+  durumuna düşmemeli, backend çağrısı best-effort kabul edildi; bu yüzden `ProfileViewModel`
+  tarafında bir hata effect'i eklenmedi. Sıra önce API sonra `clear()` olacak şekilde
+  korundu: `tokenStore.clear()` önce çalışsaydı `AuthInterceptor` artık `Authorization`
+  header'ı eklemeyeceğinden backend isteği 401 ile reddedilebilirdi. `popUpTo` hedefi olarak
+  `RenCarDestinations.HOME` değil `navController.graph.findStartDestination().id` (=
+  `SPLASH`) kullanıldı — görevin "Splash/Onboarding dahil TÜM backstack temizlensin, geri
+  tuşuyla Home'a dönülemesin" şartı için `HOME`'u hedeflemek yetersiz kalırdı (öncesindeki
+  Login/Onboarding/Splash entry'lerini silmezdi).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD SUCCESSFUL,
+  uyarı yok. Emülatörde gerçek backend'e karşı uçtan uca runtime testi (Çıkış Yap → POST
+  isteğinin gittiğinin doğrulanması → Login ekranı → geri tuşuyla Home'a dönülememesi →
+  ağ kapalıyken çıkış senaryosu) HENÜZ YAPILMADI.
+
+### 2026-07-18 — Bug fix: Çıkış Yap sonrası geri tuşu Profile'a dönüyordu (1 dosya)
+
+- **Ne yapıldı:** Kullanıcı, Çıkış Yap → Login ekranından geri tuşuna basınca tekrar
+  Profile'a döndüğünü bildirdi. Kök neden: bir önceki batch'teki `RenCarNavHost.kt`'nin
+  `HOME` bloğundaki `onNavigateToLogin`, `popUpTo(navController.graph.
+  findStartDestination().id)` (yani `SPLASH`) kullanıyordu — ama `SPLASH`, Splash'tan
+  Home'a ilk geçişte zaten `popUpTo(SPLASH){inclusive=true}` ile backstack'ten
+  kaldırılmış olduğundan, Home'a ulaşıldığında backstack'te artık YOK. Compose
+  Navigation'da `popUpTo` hedef ID backstack'te bulunamazsa sessizce hiçbir şeyi
+  popplamıyor; bu yüzden `LOGIN` sadece mevcut `[HOME]` backstack'inin üzerine
+  ekleniyordu (`[HOME, LOGIN]`), geri tuşu da Home'a (Profile sekmesine) dönüyordu.
+  Düzeltme: hedef ID'yi `SPLASH` yerine backstack'te olup olmadığına bakılmaksızın
+  TÜM backstack'i temizleyen `popUpTo(0)` yapıldı — artık kullanıcı hangi ekrandan
+  çıkış yaparsa yapsın backstack tamamen boşalıyor.
+- **Değişen dosyalar:** `navigation/RenCarNavHost.kt` (`onNavigateToLogin` içindeki
+  `popUpTo` hedefi + artık kullanılmayan `findStartDestination` importu kaldırıldı).
+- **Neden bu şekilde yapıldı:** `findStartDestination().id` yaklaşımı yalnızca start
+  destination backstack'te HÂLÂ mevcutsa çalışır — bu projede login/onboarding/splash
+  akışlarının neredeyse tamamı kendi geçişlerinde zaten `inclusive=true` ile önceki
+  entry'leri temizlediğinden, Home'a ulaşan hiçbir yol üzerinde Splash backstack'te
+  kalmıyor. `popUpTo(0)` bu varsayıma bağımlı olmayan, Android Navigation'ın "tüm
+  backstack'i temizle" için standart/idiomatik yolu.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD
+  SUCCESSFUL, uyarı yok. Emülatörde runtime testi (Profil → Çıkış Yap → Login →
+  geri tuşu → uygulamadan çıkma, Profile'a dönmeme) HENÜZ YAPILMADI.
