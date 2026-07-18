@@ -25,6 +25,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 private const val POLL_INTERVAL_MS = 5000L
+private const val TICK_INTERVAL_MS = 1000L
 private const val MAX_ROUTE_POINTS = 300
 
 @HiltViewModel(assistedFactory = ActiveRentalViewModel.Factory::class)
@@ -47,10 +48,12 @@ class ActiveRentalViewModel @AssistedInject constructor(
     val effect: Flow<ActiveRentalContract.Effect> = _effect.receiveAsFlow()
 
     private var pollingJob: Job? = null
+    private var tickingJob: Job? = null
     private var isLocationObserverStarted = false
 
     init {
         startPolling()
+        startTicking()
     }
 
     fun onIntent(intent: ActiveRentalContract.Intent) {
@@ -69,6 +72,24 @@ class ActiveRentalViewModel @AssistedInject constructor(
                 delay(POLL_INTERVAL_MS)
             }
         }
+    }
+
+    // Sunucu yalnızca 5sn'de bir yoklanıyor; ekranın saniyesi buna bağlı kalırsa "5, 5, 5"
+    // şeklinde sıçrayarak ilerlerdi. Bu yüzden ekrandaki süre her saniye yerel olarak artırılır,
+    // her poll'da gelen gerçek `elapsedSeconds` ile senkronize edilip sürüklenme düzeltilir.
+    private fun startTicking() {
+        tickingJob?.cancel()
+        tickingJob = viewModelScope.launch {
+            while (isActive) {
+                delay(TICK_INTERVAL_MS)
+                _state.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
+            }
+        }
+    }
+
+    private fun stopTimers() {
+        pollingJob?.cancel()
+        tickingJob?.cancel()
     }
 
     private suspend fun refreshActiveRental() {
@@ -96,7 +117,7 @@ class ActiveRentalViewModel @AssistedInject constructor(
             is AuthResult.Error -> {
                 _state.update { it.copy(isLoading = false) }
                 if (result.code == 404) {
-                    pollingJob?.cancel()
+                    stopTimers()
                 } else {
                     sendEffect(ActiveRentalContract.Effect.ShowError(result.message))
                 }
@@ -146,7 +167,7 @@ class ActiveRentalViewModel @AssistedInject constructor(
     private fun handleFinishRentalClicked() {
         val current = _state.value
         if (current.rentalId.isBlank() || !current.canFinish) return
-        pollingJob?.cancel()
+        stopTimers()
         _state.update { it.copy(isFinishing = true) }
         viewModelScope.launch {
             when (val result = rentalsRepository.finishRental(current.rentalId)) {
@@ -158,6 +179,7 @@ class ActiveRentalViewModel @AssistedInject constructor(
                     _state.update { it.copy(isFinishing = false) }
                     sendEffect(ActiveRentalContract.Effect.ShowError(result.message))
                     startPolling()
+                    startTicking()
                 }
             }
         }
@@ -168,6 +190,6 @@ class ActiveRentalViewModel @AssistedInject constructor(
     }
 
     override fun onCleared() {
-        pollingJob?.cancel()
+        stopTimers()
     }
 }

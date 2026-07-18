@@ -1,5 +1,6 @@
 package com.turkcell.rencar_pair.feature.history
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,16 +18,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -141,7 +143,7 @@ private fun RentalCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            CarThumbnail()
+            RouteThumbnail(rental = rental)
 
             Spacer(Modifier.width(12.dp))
 
@@ -185,21 +187,47 @@ private fun RentalCard(
     }
 }
 
+private val ROUTE_START_COLOR = Color(0xFF34C759)
+private val ROUTE_END_COLOR = Color(0xFF4285F4)
+
+// API geçmiş kiralamalar için gerçek GPS/rota verisi döndürmüyor; bu yüzden stilize bir önizleme çizilir (varyant, id'den türetilip sabit tutulur).
 @Composable
-private fun CarThumbnail() {
+private fun RouteThumbnail(rental: RentalRecord) {
+    val variant = Math.floorMod(rental.id.hashCode(), 4)
+
     Box(
-        modifier         = Modifier
+        modifier = Modifier
             .size(64.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center
+            .background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Icon(
-            imageVector        = Icons.Filled.DirectionsCar,
-            contentDescription = null,
-            tint               = MaterialTheme.colorScheme.primary,
-            modifier           = Modifier.size(36.dp)
-        )
+        val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+
+            // Sokak dokusu izlenimi veren birkaç ince ızgara çizgisi.
+            drawLine(gridColor, Offset(w * 0.35f, 0f), Offset(w * 0.35f, h), strokeWidth = 1.5f)
+            drawLine(gridColor, Offset(0f, h * 0.65f), Offset(w, h * 0.65f), strokeWidth = 1.5f)
+
+            val (start, end, control) = when (variant) {
+                0 -> Triple(Offset(w * 0.18f, h * 0.82f), Offset(w * 0.82f, h * 0.18f), Offset(w * 0.85f, h * 0.75f))
+                1 -> Triple(Offset(w * 0.18f, h * 0.18f), Offset(w * 0.82f, h * 0.82f), Offset(w * 0.85f, h * 0.2f))
+                2 -> Triple(Offset(w * 0.2f, h * 0.5f), Offset(w * 0.85f, h * 0.15f), Offset(w * 0.4f, h * 0.1f))
+                else -> Triple(Offset(w * 0.15f, h * 0.2f), Offset(w * 0.8f, h * 0.55f), Offset(w * 0.75f, h * 0.1f))
+            }
+
+            val path = Path().apply {
+                moveTo(start.x, start.y)
+                quadraticTo(control.x, control.y, end.x, end.y)
+            }
+            drawPath(path, color = ROUTE_END_COLOR, style = Stroke(width = 5f))
+
+            drawCircle(ROUTE_START_COLOR, radius = 5f, center = start)
+            drawCircle(Color.White, radius = 6.5f, center = end, style = Stroke(width = 2f))
+            drawCircle(ROUTE_END_COLOR, radius = 5f, center = end)
+        }
     }
 }
 

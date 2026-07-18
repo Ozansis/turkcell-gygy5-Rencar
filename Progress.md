@@ -2047,6 +2047,60 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   VehicleDetail/ActiveRental mini-haritalarının davranışının değişmediği runtime'da
   DOĞRULANAMADI — bir sonraki oturumda cihazda/emülatörde test edilmeli.
 
+### 2026-07-18 — Aktif yolculukta geçen süre 5'er 5'er sıçrıyordu, her saniye artacak şekilde düzeltildi (1 dosya)
+
+- **Ne yapıldı:** Kullanıcı "araç kiralama başladığında saniyeler 5 5 gidiyor, her saniye
+  gözüksün" diye bildirdi. Kök neden: `ActiveRentalViewModel`'deki `elapsedSeconds` doğrudan
+  `GET /rentals/active` yoklamasından geliyordu ve bu uç yalnızca `POLL_INTERVAL_MS = 5000`ms'de
+  bir çağrılıyordu — ekrandaki süre bu yüzden 0, 5, 10, 15... şeklinde 5'er sıçrayarak
+  ilerliyordu, her saniye artmıyordu. Düzeltme: 1 saniyelik ayrı bir `tickingJob`
+  (`startTicking()`) eklendi; bu, `elapsedSeconds`'ı her saniye yerelde 1 artırıyor. 5 saniyelik
+  sunucu yoklaması (`refreshActiveRental()`) hâlâ aynı sıklıkta çalışıyor ama artık yalnızca
+  `elapsedSeconds`'ı gerçek sunucu değerine "senkronize/düzeltiyor" (sürüklenmeyi önlüyor);
+  `currentCost`/`distanceKm` gibi sunucudan gelmesi gereken diğer alanlara dokunulmadı, onlar
+  hâlâ 5sn'de bir güncelleniyor (kapsam dışı, kullanıcı yalnızca saniye göstergesinden bahsetti).
+- **Değişen dosyalar:** `feature/rental/active/ActiveRentalViewModel.kt` (`TICK_INTERVAL_MS`
+  sabiti, `tickingJob` + `startTicking()`, ortak `stopTimers()` yardımcı fonksiyonu — hem
+  `pollingJob` hem `tickingJob`'ı birlikte durdurup yeniden başlatan yerler bu fonksiyona
+  yönlendirildi: 404 durumu, `handleFinishRentalClicked`'daki başarı/hata dalları, `onCleared`).
+- **Neden bu şekilde yapıldı:** Poll aralığını 1sn'ye düşürmek yerine (gereksiz sunucu yükü)
+  yerel bir sayaç eklendi — klasik "smooth timer + periyodik sunucu senkronizasyonu" deseni.
+  `Contract.State.elapsedSeconds` alanına dokunulmadı, yalnızca ViewModel'in onu güncelleme
+  sıklığı değişti; mvi-viewmodel-rules.md'ye aykırı bir şey yok (state güncellemesi hâlâ yalnızca
+  `_state.update { it.copy(...) }` ile).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD SUCCESSFUL, yeni
+  uyarı yok. Bağlı emülatör/cihaz olmadığından (`adb` kurulu değil) aktif bir kiralamada süre
+  etiketinin gerçekten her saniye arttığı ve 5sn'lik sunucu senkronizasyonunun görünür bir
+  sıçramaya/geri gitmeye yol açmadığı runtime'da DOĞRULANAMADI — bir sonraki oturumda cihazda
+  test edilmeli.
+
+### 2026-07-18 — Kiralama Geçmişi kartlarına rota önizleme ikonu eklendi (1 dosya)
+
+- **Ne yapıldı:** Aktif yolculuktaki rotanın neden dümdüz göründüğü araştırılırken (bkz. bir
+  önceki konu — kod tarafında bir hata bulunamadı, muhtemelen soketten az/tek nokta gelmesi)
+  kullanıcı konuyu değiştirip Figma tasarımından bir ekran görüntüsü paylaştı: "Kiralama
+  Geçmişi" listesindeki her kartın solundaki küçük görselin, o yolculuğun rotasını gösteren
+  yeşil (başlangıç) / mavi (bitiş) noktalı bir çizgi ikonu olmasını istedi. `HistoryScreen.kt`'
+  deki düz araba ikonlu `CarThumbnail()` composable'ı kaldırılıp yerine `RouteThumbnail()`
+  eklendi: 64dp'lik kutuda hafif bir "sokak ızgarası" (2 ince çizgi) arka planı üzerine,
+  yeşil başlangıç noktasından mavi bitiş noktasına giden yumuşak bir eğri (`Path.quadraticTo`)
+  çiziliyor. Kiralama `id`'sinden türetilen bir varyant (`hashCode() % 4`) başlangıç/bitiş
+  köşelerini ve eğrinin yönünü belirliyor — böylece kartlar tasarımdaki gibi birbirinden farklı
+  görünüyor ama her kart kendi içinde her açılışta aynı kalıyor (kararlı/deterministik).
+- **Değişen dosyalar:** `feature/history/HistoryScreen.kt`.
+- **Neden bu şekilde yapıldı:** `RentalRecord`/`HistoryContract` ve openapi.json'daki geçmiş
+  kiralama uçları yalnızca süre/mesafe/ücret özeti dönüyor, hiçbir GPS/rota koordinatı
+  saklamıyor — bu yüzden gerçek bir rota YENİDEN ÇİZİLEMEZ (Agent.md §2.2 uydurma yasağı:
+  var olmayan koordinat verisi üretilmedi). Bunun yerine tasarımdaki görseli birebir taklit eden,
+  tamamen dekoratif/stilize bir Canvas çizimi tercih edildi; bu, kullanıcının ekran görüntüsüyle
+  netleştirdiği talebe (gerçek harita değil, o görünümdeki gibi bir ikon) tam karşılık veriyor.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD SUCCESSFUL, yeni
+  uyarı yok (ilk denemede `quadraticBezierTo` deprecation uyarısı çıktı, `quadraticTo` ile
+  değiştirilip giderildi). Bağlı emülatör/cihaz olmadığından (`adb` kurulu değil) 4 farklı
+  varyantın gerçekten görsel olarak ayırt edilebilir ve tasarıma yakın göründüğü runtime'da
+  GÖRSEL OLARAK DOĞRULANAMADI — bir sonraki oturumda Kiralama Geçmişi ekranı cihazda açılıp
+  paylaşılan tasarımla karşılaştırılmalı.
+
 ### 2026-07-18 — 8 ekranda status bar / gesture nav bar üzerine taşma düzeltildi (2 batch, 8 dosya)
 
 - **Ne yapıldı:** Kullanıcı "uygulama telefonun saat/bildirim kısmına ve alttaki oklara kayıyor,
