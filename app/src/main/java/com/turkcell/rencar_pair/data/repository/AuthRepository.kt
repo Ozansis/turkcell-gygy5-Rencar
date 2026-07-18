@@ -9,6 +9,7 @@ import com.turkcell.rencar_pair.data.network.dto.RefreshTokenDto
 import com.turkcell.rencar_pair.data.network.dto.RegisterDto
 import com.turkcell.rencar_pair.data.network.dto.UserResponseDto
 import com.turkcell.rencar_pair.data.network.dto.VerifyOtpDto
+import com.google.gson.JsonParser
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,6 +18,26 @@ import retrofit2.Response
 sealed interface AuthResult<out T> {
     data class Success<T>(val data: T) : AuthResult<T>
     data class Error(val code: Int?, val message: String) : AuthResult<Nothing>
+}
+
+/**
+ * Backend hata gövdesindeki ("statusCode"/"message"/"error") "message" alanını okur.
+ * "message" NestJS validation hatalarında dizi olabilir; bu durumda satırlarla birleştirilir.
+ * Ayrıştırma başarısız olursa jenerik "Sunucu hatası" metnine düşer.
+ */
+fun Response<*>.extractErrorMessage(): String {
+    val fallback = "Sunucu hatası (kod: ${code()})."
+    val raw = errorBody()?.string() ?: return fallback
+    return try {
+        val messageElement = JsonParser.parseString(raw).asJsonObject.get("message")
+        when {
+            messageElement == null || messageElement.isJsonNull -> fallback
+            messageElement.isJsonArray -> messageElement.asJsonArray.joinToString("\n") { it.asString }
+            else -> messageElement.asString
+        }
+    } catch (e: Exception) {
+        fallback
+    }
 }
 
 @Singleton
@@ -89,7 +110,7 @@ class AuthRepository @Inject constructor(
             if (response.isSuccessful && body != null) {
                 AuthResult.Success(body)
             } else {
-                AuthResult.Error(response.code(), "Sunucu hatası (kod: ${response.code()}).")
+                AuthResult.Error(response.code(), response.extractErrorMessage())
             }
         } catch (e: IOException) {
             AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
