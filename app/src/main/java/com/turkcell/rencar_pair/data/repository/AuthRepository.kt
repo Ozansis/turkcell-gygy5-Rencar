@@ -71,7 +71,13 @@ class AuthRepository @Inject constructor(
     }
 
     suspend fun logout() {
-        tokenStore.clear()
+        try {
+            authApiService.logout()
+        } catch (e: IOException) {
+            // Ağ hatası olsa bile kullanıcı yerel olarak çıkış yapabilmeli.
+        } finally {
+            tokenStore.clear()
+        }
     }
 
     suspend fun getMe(): AuthResult<UserResponseDto> = safeCall { authApiService.me() }

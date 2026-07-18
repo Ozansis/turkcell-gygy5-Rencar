@@ -2,6 +2,9 @@ package com.turkcell.rencar_pair.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.turkcell.rencar_pair.data.repository.AuthRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,7 +14,10 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class ProfileViewModel : ViewModel() {
+@HiltViewModel
+class ProfileViewModel @Inject constructor(
+    private val authRepository: AuthRepository
+) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileContract.State())
     val state: StateFlow<ProfileContract.State> = _state.asStateFlow()
@@ -30,7 +36,14 @@ class ProfileViewModel : ViewModel() {
             ProfileContract.Intent.SettingsClicked       -> sendEffect(ProfileContract.Effect.NavigateToSettings)
             ProfileContract.Intent.HelpClicked           -> sendEffect(ProfileContract.Effect.NavigateToHelp)
             ProfileContract.Intent.InviteClicked         -> sendEffect(ProfileContract.Effect.NavigateToInvite)
-            ProfileContract.Intent.SignOutClicked        -> sendEffect(ProfileContract.Effect.NavigateToLogin)
+            ProfileContract.Intent.SignOutClicked        -> handleSignOutClicked()
+        }
+    }
+
+    private fun handleSignOutClicked() {
+        viewModelScope.launch {
+            authRepository.logout()
+            sendEffect(ProfileContract.Effect.NavigateToLogin)
         }
     }
 

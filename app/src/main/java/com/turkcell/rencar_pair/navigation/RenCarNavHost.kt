@@ -215,6 +215,11 @@ fun RenCarNavHost() {
                 },
                 onNavigateToHistoryDetail = { rentalId ->
                     navController.navigate(RenCarDestinations.historyDetailRoute(rentalId))
+                },
+                onNavigateToLogin = {
+                    navController.navigate(RenCarDestinations.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
                 }
             )
         }
