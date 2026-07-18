@@ -45,14 +45,20 @@ class MapsViewModel @Inject constructor(
 
     fun onIntent(intent: MapsContract.Intent) {
         when (intent) {
-            is MapsContract.Intent.LocationChanged        -> handleLocationChanged(intent.location)
-            MapsContract.Intent.LocationPermissionGranted  -> handleLocationPermissionGranted()
-            MapsContract.Intent.LocationPermissionDenied   -> handleLocationPermissionDenied()
-            is MapsContract.Intent.TypeFilterSelected      -> handleTypeFilterSelected(intent.type)
-            is MapsContract.Intent.VehicleMarkerClicked    -> handleVehicleMarkerClicked(intent.vehicleId)
-            MapsContract.Intent.RecenterClicked            -> sendEffect(MapsContract.Effect.RequestLocationRefresh)
-            MapsContract.Intent.FindNearestClicked         -> handleFindNearestClicked()
-            MapsContract.Intent.ActiveRentalBannerClicked  -> handleActiveRentalBannerClicked()
+            is MapsContract.Intent.LocationChanged          -> handleLocationChanged(intent.location)
+            MapsContract.Intent.LocationPermissionGranted    -> handleLocationPermissionGranted()
+            MapsContract.Intent.LocationPermissionDenied     -> handleLocationPermissionDenied()
+            is MapsContract.Intent.TypeFilterSelected        -> handleTypeFilterSelected(intent.type)
+            is MapsContract.Intent.SearchQueryChanged        -> handleSearchQueryChanged(intent.value)
+            is MapsContract.Intent.SegmentFilterSelected     -> handleSegmentFilterSelected(intent.segment)
+            is MapsContract.Intent.TransmissionFilterSelected -> handleTransmissionFilterSelected(intent.transmission)
+            is MapsContract.Intent.MinSeatsFilterSelected    -> handleMinSeatsFilterSelected(intent.minSeats)
+            MapsContract.Intent.FilterPanelToggled           -> handleFilterPanelToggled()
+            MapsContract.Intent.FiltersCleared               -> handleFiltersCleared()
+            is MapsContract.Intent.VehicleMarkerClicked      -> handleVehicleMarkerClicked(intent.vehicleId)
+            MapsContract.Intent.RecenterClicked              -> sendEffect(MapsContract.Effect.RequestLocationRefresh)
+            MapsContract.Intent.FindNearestClicked           -> handleFindNearestClicked()
+            MapsContract.Intent.ActiveRentalBannerClicked    -> handleActiveRentalBannerClicked()
         }
     }
 
@@ -123,6 +129,38 @@ class MapsViewModel @Inject constructor(
         _state.update { it.copy(selectedType = type) }
     }
 
+    private fun handleSearchQueryChanged(value: String) {
+        _state.update { it.copy(searchQuery = value) }
+    }
+
+    private fun handleSegmentFilterSelected(segment: VehicleSegment?) {
+        _state.update { it.copy(selectedSegment = segment) }
+    }
+
+    private fun handleTransmissionFilterSelected(transmission: String?) {
+        _state.update { it.copy(selectedTransmission = transmission) }
+    }
+
+    private fun handleMinSeatsFilterSelected(minSeats: Int?) {
+        _state.update { it.copy(selectedMinSeats = minSeats) }
+    }
+
+    private fun handleFilterPanelToggled() {
+        _state.update { it.copy(isFilterPanelExpanded = !it.isFilterPanelExpanded) }
+    }
+
+    private fun handleFiltersCleared() {
+        _state.update {
+            it.copy(
+                selectedType = null,
+                selectedSegment = null,
+                selectedTransmission = null,
+                selectedMinSeats = null,
+                searchQuery = ""
+            )
+        }
+    }
+
     private fun handleVehicleMarkerClicked(vehicleId: String) {
         val vehicle = _state.value.vehicles.find { it.id == vehicleId } ?: return
         sendEffect(MapsContract.Effect.NavigateToVehicleDetail(vehicle.id, vehicle.distanceMeters))
@@ -154,6 +192,7 @@ class MapsViewModel @Inject constructor(
     private fun VehicleResponseDto.toNearbyVehicle(myLocation: GeoPoint?): NearbyVehicle? {
         val vehicleType = runCatching { VehicleType.valueOf(type) }.getOrNull() ?: return null
         val vehicleStatus = runCatching { VehicleStatus.valueOf(status) }.getOrNull() ?: return null
+        val vehicleSegment = runCatching { VehicleSegment.valueOf(segment) }.getOrNull() ?: return null
         val vehicleLocation = GeoPoint(latitude, longitude)
         return NearbyVehicle(
             id = id,
@@ -161,6 +200,7 @@ class MapsViewModel @Inject constructor(
             brand = brand,
             model = model,
             type = vehicleType,
+            segment = vehicleSegment,
             status = vehicleStatus,
             pricePerDay = pricePerDay,
             location = vehicleLocation,

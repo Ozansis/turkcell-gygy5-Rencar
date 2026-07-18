@@ -1,6 +1,7 @@
 package com.turkcell.rencar_pair.feature.maps
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.LocationOn
@@ -34,11 +36,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -64,7 +68,12 @@ fun MapsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SearchBar()
+            SearchBar(
+                query = state.searchQuery,
+                onQueryChange = { onIntent(MapsContract.Intent.SearchQueryChanged(it)) },
+                onTuneClick = { onIntent(MapsContract.Intent.FilterPanelToggled) },
+                hasActiveFilters = state.activeExtraFilterCount > 0
+            )
             if (state.activeRentalId != null) {
                 ActiveRentalBanner(
                     vehicleLabel = state.activeRentalVehicleLabel,
@@ -122,7 +131,13 @@ private fun ZoomButton(
 }
 
 @Composable
-private fun SearchBar(modifier: Modifier = Modifier) {
+private fun SearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onTuneClick: () -> Unit,
+    hasActiveFilters: Boolean,
+    modifier: Modifier = Modifier
+) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -134,24 +149,57 @@ private fun SearchBar(modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "Nereden araç alacaksın?",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Box(modifier = Modifier.weight(1f)) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = "Marka, model veya plaka ara",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
-            Icon(
-                imageVector = Icons.Default.Tune,
-                contentDescription = "Filtrele",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable(onClick = onTuneClick)
+                    .padding(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Tune,
+                    contentDescription = "Filtrele",
+                    tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (hasActiveFilters) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
         }
     }
 }
@@ -227,7 +275,7 @@ private fun NearbyVehiclesSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = { }) {
+                IconButton(onClick = { onIntent(MapsContract.Intent.FilterPanelToggled) }) {
                     Icon(Icons.Default.Tune, contentDescription = "Filtrele")
                 }
             }
@@ -239,14 +287,24 @@ private fun NearbyVehiclesSheet(
                 onTypeSelected = { type -> onIntent(MapsContract.Intent.TypeFilterSelected(type)) }
             )
 
+            if (state.isFilterPanelExpanded) {
+                Spacer(Modifier.height(12.dp))
+                ExtraFiltersPanel(state = state, onIntent = onIntent)
+            }
+
             Spacer(Modifier.height(16.dp))
+
+            if (state.filteredVehicles.isEmpty()) {
+                EmptyFilterResult()
+                Spacer(Modifier.height(16.dp))
+            }
 
             Button(
                 onClick = { onIntent(MapsContract.Intent.FindNearestClicked) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                enabled = state.myLocation != null,
+                enabled = state.myLocation != null && state.filteredVehicles.isNotEmpty(),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
@@ -261,6 +319,27 @@ private fun NearbyVehiclesSheet(
 }
 
 @Composable
+private fun EmptyFilterResult(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Bu özelliklerde araç yok, tekrar deneyin",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
 private fun VehicleTypeFilterRow(
     selectedType: VehicleType?,
     onTypeSelected: (VehicleType?) -> Unit,
@@ -270,25 +349,9 @@ private fun VehicleTypeFilterRow(
         modifier = modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        FilterChip(
-            selected = selectedType == null,
-            onClick = { onTypeSelected(null) },
-            label = { Text("Tümü") },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                selectedLabelColor = Color.White
-            )
-        )
+        SelectableChip(label = "Tümü", selected = selectedType == null, onClick = { onTypeSelected(null) })
         VehicleType.entries.forEach { type ->
-            FilterChip(
-                selected = selectedType == type,
-                onClick = { onTypeSelected(type) },
-                label = { Text(type.label()) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                    selectedLabelColor = Color.White
-                )
-            )
+            SelectableChip(label = type.label(), selected = selectedType == type, onClick = { onTypeSelected(type) })
         }
     }
 }
@@ -299,4 +362,114 @@ private fun VehicleType.label(): String = when (this) {
     VehicleType.HATCHBACK -> "Hatchback"
     VehicleType.STATION   -> "Station"
     VehicleType.MINIVAN   -> "Minivan"
+}
+
+private val MIN_SEATS_FILTER_OPTIONS = listOf(2, 4, 5, 7)
+
+@Composable
+private fun ExtraFiltersPanel(
+    state: MapsContract.State,
+    onIntent: (MapsContract.Intent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        FilterSectionLabel("Segment")
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SelectableChip(
+                label = "Tümü",
+                selected = state.selectedSegment == null,
+                onClick = { onIntent(MapsContract.Intent.SegmentFilterSelected(null)) }
+            )
+            VehicleSegment.entries.forEach { segment ->
+                SelectableChip(
+                    label = segment.label(),
+                    selected = state.selectedSegment == segment,
+                    onClick = { onIntent(MapsContract.Intent.SegmentFilterSelected(segment)) }
+                )
+            }
+        }
+
+        if (state.availableTransmissions.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            FilterSectionLabel("Vites")
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SelectableChip(
+                    label = "Tümü",
+                    selected = state.selectedTransmission == null,
+                    onClick = { onIntent(MapsContract.Intent.TransmissionFilterSelected(null)) }
+                )
+                state.availableTransmissions.forEach { transmission ->
+                    SelectableChip(
+                        label = transmission,
+                        selected = state.selectedTransmission == transmission,
+                        onClick = { onIntent(MapsContract.Intent.TransmissionFilterSelected(transmission)) }
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        FilterSectionLabel("Min. koltuk")
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SelectableChip(
+                label = "Tümü",
+                selected = state.selectedMinSeats == null,
+                onClick = { onIntent(MapsContract.Intent.MinSeatsFilterSelected(null)) }
+            )
+            MIN_SEATS_FILTER_OPTIONS.forEach { seats ->
+                SelectableChip(
+                    label = "$seats+",
+                    selected = state.selectedMinSeats == seats,
+                    onClick = { onIntent(MapsContract.Intent.MinSeatsFilterSelected(seats)) }
+                )
+            }
+        }
+
+        if (state.activeExtraFilterCount > 0) {
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = { onIntent(MapsContract.Intent.FiltersCleared) }) {
+                Text("Filtreleri temizle")
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun SelectableChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = Color.White
+        )
+    )
+}
+
+private fun VehicleSegment.label(): String = when (this) {
+    VehicleSegment.ECONOMY -> "Ekonomik"
+    VehicleSegment.COMFORT -> "Konfor"
+    VehicleSegment.SUV     -> "SUV"
 }
