@@ -19,7 +19,7 @@ class VehiclesRepository @Inject constructor(
             if (response.isSuccessful && body != null) {
                 AuthResult.Success(body)
             } else {
-                AuthResult.Error(response.code(), "Sunucu hatası (kod: ${response.code()}).")
+                AuthResult.Error(response.code(), response.extractErrorMessage())
             }
         } catch (e: IOException) {
             AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
@@ -33,7 +33,7 @@ class VehiclesRepository @Inject constructor(
             if (response.isSuccessful && body != null) {
                 AuthResult.Success(body)
             } else {
-                AuthResult.Error(response.code(), "Sunucu hatası (kod: ${response.code()}).")
+                AuthResult.Error(response.code(), response.extractErrorMessage())
             }
         } catch (e: IOException) {
             AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
@@ -47,7 +47,7 @@ class VehiclesRepository @Inject constructor(
             if (response.isSuccessful && body != null) {
                 AuthResult.Success(body)
             } else {
-                AuthResult.Error(response.code(), "Sunucu hatası (kod: ${response.code()}).")
+                AuthResult.Error(response.code(), response.extractErrorMessage())
             }
         } catch (e: IOException) {
             AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
