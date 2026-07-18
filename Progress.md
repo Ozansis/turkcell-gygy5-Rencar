@@ -1815,3 +1815,39 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   BUILD SUCCESSFUL, uyarı yok. `HelpRoute`/`InviteRoute` henüz hiçbir yerden
   çağrılmadığından (izole) runtime testi bilinçli olarak navigasyon bağlama batch'ine
   bırakıldı.
+
+### 2026-07-18 — Telefon numarası alanındaki imleç kayması düzeltildi (Login + Register)
+
+- **Ne yapıldı:** 2026-07-15 tarihli girdide "kapsam dışı, ayrı görev" olarak not
+  edilen imleç kayması hatası (`...0102` yazılınca `...0210` görünmesi) kök
+  nedeniyle düzeltildi. Kök neden: `PhoneNumberField`'da `OutlinedTextField`'a
+  `value` olarak her tuşta yeniden üretilen formatlı (boşluklu) bir String
+  veriliyordu ("532 123 45 67"); Compose'un String-tabanlı overload'ı imleç
+  konumunu eski/yeni metni diff ederek buluyor, formatlama boşluk ekleyip
+  metnin uzunluğunu değiştirince bu diff yanlış hizalanıp imleci yanlış yere
+  atlatıyordu. Düzeltme: `value` artık ham (boşluksuz) rakamlarla kalıyor,
+  boşluklar yalnızca görüntüde `PhoneNumberVisualTransformation` (yeni,
+  `OffsetMapping` ile ham<->görüntü imleç eşlemesi yapan bir `VisualTransformation`)
+  ile ekleniyor — bu Compose'un maskeli/formatlı giriş için önerdiği standart
+  desendir, imleç eşlemesini çerçeve doğru yapıyor.
+- **Değişen dosyalar:** `feature/auth/login/LoginScreen.kt`,
+  `feature/auth/register/RegisterScreen.kt` (ikisinde de birebir aynı kopya
+  `PhoneNumberField`/`formatPhoneNumber` deseni vardı, aynı hata ikisinde de
+  mevcuttu — kullanıcı onayıyla ikisi de aynı batch'te düzeltildi).
+- **Neden bu şekilde yapıldı:** Paylaşımlı bir dosya/fonksiyon açmak yerine
+  `PhoneNumberVisualTransformation` her iki dosyada da (mevcut
+  `formatPhoneNumber` kopyası emsaliyle tutarlı olarak) ayrı ayrı tanımlandı —
+  proje bu iki ekran arasında küçük telefon-alanı tekrarını zaten bilinçli
+  olarak kabul etmişti (bkz. 2026-07-14 Login/Otp girdisi). `ViewModel`
+  katmanına (Login/RegisterViewModel'deki `value.filter{it.isDigit()}.take(10)`
+  güvenlik filtresi) dokunulmadı — hâlâ geçerli ve gerekli, artık her zaman
+  zaten temiz rakam string'i gelse de savunma amaçlı korundu.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi, BUILD
+  SUCCESSFUL, yeni uyarı yok. Şu an bağlı bir emülatör/cihaz olmadığından
+  (`adb devices` boş döndü) cihazda görsel/runtime testi YAPILAMADI — bir
+  sonraki oturumda emülatör açılıp Login ve Register ekranlarında telefon
+  alanına hızlı/yavaş rakam girilerek imlecin artık sabit kaldığı elle
+  doğrulanmalı.
+- **Sıradaki adım:** Emülatörü açıp Login ekranında telefon alanına
+  `5321234567` yazarak (hem baştan hem araya rakam ekleyerek) imlecin doğru
+  konumda kaldığını, aynısını Register ekranında da doğrulamak.
