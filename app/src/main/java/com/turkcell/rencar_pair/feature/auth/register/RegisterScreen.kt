@@ -37,9 +37,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
@@ -279,8 +282,9 @@ private fun PhoneNumberField(
     onValueChange: (String) -> Unit
 ) {
     OutlinedTextField(
-        value           = formatPhoneNumber(phoneNumber),
-        onValueChange   = { onValueChange(it) },
+        value                = phoneNumber,
+        onValueChange        = { onValueChange(it) },
+        visualTransformation = PhoneNumberVisualTransformation,
         modifier        = Modifier.fillMaxWidth(),
         placeholder     = {
             Text(
@@ -324,6 +328,9 @@ private fun PhoneNumberField(
     )
 }
 
+private val PHONE_SPACE_THRESHOLDS = listOf(3, 6, 8)
+private val PHONE_SPACE_POSITIONS = listOf(3, 7, 10)
+
 private fun formatPhoneNumber(digits: String): String {
     val builder = StringBuilder()
     digits.forEachIndexed { index, char ->
@@ -333,4 +340,28 @@ private fun formatPhoneNumber(digits: String): String {
         builder.append(char)
     }
     return builder.toString()
+}
+
+/**
+ * Ham (boşluksuz) rakamları görüntüde "532 123 45 67" biçiminde gösterir.
+ * value/onValueChange ham metinle çalışmaya devam eder; imleç konumu OffsetMapping
+ * ile ham<->görüntü arasında eşlenir (String'i her tuşta yeniden formatlayıp value'ya
+ * vermek, Compose'un diff tabanlı imleç takibini bozuyordu — bkz. PROGRESS.md 2026-07-15).
+ */
+private object PhoneNumberVisualTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val digits = text.text
+        val offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                val clamped = offset.coerceIn(0, digits.length)
+                return clamped + PHONE_SPACE_THRESHOLDS.count { it < clamped }
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                val spacesBefore = PHONE_SPACE_POSITIONS.count { it < offset }
+                return (offset - spacesBefore).coerceIn(0, digits.length)
+            }
+        }
+        return TransformedText(AnnotatedString(formatPhoneNumber(digits)), offsetMapping)
+    }
 }
