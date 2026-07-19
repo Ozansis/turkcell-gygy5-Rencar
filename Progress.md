@@ -2838,3 +2838,38 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   Et" ile CUSTOMER'a yükseldikten sonra bu üç sekmeye (uygulamayı
   kapatmadan) geri dönüldüğünde verinin otomatik yüklendiği elle test
   edilmeli.
+
+### 2026-07-19 — Ödeme sonrası AlertDialog: WALLET/CARD/IYZICO artık aynı ortak fonksiyondan geçiyor
+
+- **Ne yapıldı:** WALLET/CARD ve IYZICO ödemeleri başarılı dönünce
+  kullanıcıyı hiçbir onay olmadan doğrudan Kiralamalarım'a düşüren akış,
+  "Tamam"a basılana kadar açık kalan bir "Ödeme başarılı" `AlertDialog`'una
+  bağlandı. `RentalPaymentContract.State`'e `showPaymentSuccessDialog:
+  Boolean` ve `paymentMethodLabel` (computed) eklendi; `Intent`'e
+  `PaymentSuccessDialogConfirmed` eklendi. `RentalPaymentViewModel`'de yeni
+  ortak `handlePaymentSuccess()` fonksiyonu hem `handlePayClicked()`'ın hem
+  `handleIyzicoPaymentSucceeded()`'ın başarı dalından çağrılıyor (kod tekrarı
+  kalkmış oldu); `handlePaymentSuccessDialogConfirmed()` dialog'u kapatıp
+  ardından mevcut `Effect.NavigateToHistory`'yi gönderiyor.
+- **Değişen dosyalar:** `feature/rental/payment/RentalPaymentContract.kt`,
+  `feature/rental/payment/RentalPaymentViewModel.kt`,
+  `feature/rental/payment/RentalPaymentScreen.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcı görevde "State/Effect:
+  ShowPaymentSuccessDialog" demişti, ancak `docs/architecture/mvi-contracts.md`
+  §4 "State'e yansıtılabilecek hiçbir şey Effect olmamalıdır" kuralını
+  bağlayıcı kılıyor; "Tamam"a kadar açık kalması gereken bir dialog State
+  alanıdır — 2026-07-19 tarihli Selfie ekranı emsaliyle (`showLicenseSubmittedDialog`
+  + `Intent.LicenseSubmittedDialogConfirmed`) birebir tutarlı olacak şekilde
+  yalnızca State + Intent ile modellendi, ayrı bir Effect eklenmedi. Dialog'ta
+  gösterilecek tutar/yöntem için State'e yeni alan açılmadı — zaten mevcut
+  `totalPrice`/`selectedMethod` yeniden kullanıldı (dialog açıkken değişmezler).
+  `RentalPaymentRoute.kt`'ye dokunulmadı: `Effect.NavigateToHistory` işleyişi
+  zaten vardı, sadece tetiklenme anı (dialog kapandıktan sonra) değişti.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Bağlı cihaz/emülatör olmadığından runtime'da
+  DOĞRULANAMADI — sonraki oturumda: (1) WALLET ile öde → dialog → Tamam →
+  Kiralamalarım; (2) kayıtlı kartla CARD ile öde → aynı dialog, "Kart"
+  etiketiyle; (3) İyzico WebView'de ödeme tamamlanınca gerçek `payRental()`
+  başarılı dönüp aynı dialog "İyzico" etiketiyle açıldığı; (4) ödeme hatası
+  dönerse (üç yöntemde de) dialog'un HİÇ açılmayıp mevcut `errorMessage`
+  davranışının bozulmadığı elle test edilmeli.

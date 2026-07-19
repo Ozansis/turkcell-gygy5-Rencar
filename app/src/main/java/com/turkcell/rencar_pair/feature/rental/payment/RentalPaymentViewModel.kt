@@ -50,6 +50,7 @@ class RentalPaymentViewModel @AssistedInject constructor(
             is RentalPaymentContract.Intent.IyzicoPaymentSucceeded   -> handleIyzicoPaymentSucceeded(intent.paymentId)
             is RentalPaymentContract.Intent.IyzicoPaymentFailed      -> handleIyzicoPaymentFailed(intent.reason)
             RentalPaymentContract.Intent.IyzicoPaymentCancelled      -> handleIyzicoPaymentCancelled()
+            RentalPaymentContract.Intent.PaymentSuccessDialogConfirmed -> handlePaymentSuccessDialogConfirmed()
         }
     }
 
@@ -131,10 +132,7 @@ class RentalPaymentViewModel @AssistedInject constructor(
                 null
             }
             when (val result = rentalsRepository.payRental(current.rentalId, current.selectedMethod.name, cardId)) {
-                is AuthResult.Success -> {
-                    _state.update { it.copy(isPaying = false) }
-                    sendEffect(RentalPaymentContract.Effect.NavigateToHistory(current.rentalId))
-                }
+                is AuthResult.Success -> handlePaymentSuccess()
                 is AuthResult.Error -> _state.update {
                     it.copy(isPaying = false, errorMessage = result.message)
                 }
@@ -153,10 +151,7 @@ class RentalPaymentViewModel @AssistedInject constructor(
                     iyzicoPaymentId = paymentId
                 )
             ) {
-                is AuthResult.Success -> {
-                    _state.update { it.copy(isPaying = false) }
-                    sendEffect(RentalPaymentContract.Effect.NavigateToHistory(current.rentalId))
-                }
+                is AuthResult.Success -> handlePaymentSuccess()
                 is AuthResult.Error -> _state.update {
                     it.copy(isPaying = false, errorMessage = result.message)
                 }
@@ -170,6 +165,16 @@ class RentalPaymentViewModel @AssistedInject constructor(
 
     private fun handleIyzicoPaymentCancelled() {
         _state.update { it.copy(showIyzicoDialog = false) }
+    }
+
+    private fun handlePaymentSuccess() {
+        _state.update { it.copy(isPaying = false, showPaymentSuccessDialog = true) }
+    }
+
+    private fun handlePaymentSuccessDialogConfirmed() {
+        val rentalId = _state.value.rentalId
+        _state.update { it.copy(showPaymentSuccessDialog = false) }
+        sendEffect(RentalPaymentContract.Effect.NavigateToHistory(rentalId))
     }
 
     private fun sendEffect(effect: RentalPaymentContract.Effect) {

@@ -22,12 +22,18 @@ object RentalPaymentContract {
         val isLoading: Boolean = false,
         val isPaying: Boolean = false,
         val errorMessage: String? = null,
-        val showIyzicoDialog: Boolean = false
+        val showIyzicoDialog: Boolean = false,
+        val showPaymentSuccessDialog: Boolean = false
     ) {
         val vehicleTitle: String get() = "$brand $model"
         val usageFee: Double get() = (totalPrice - startFee - serviceFee).coerceAtLeast(0.0)
         val canPay: Boolean get() = !isLoading && !isPaying &&
             (selectedMethod != Method.CARD || selectedCardId != null)
+        val paymentMethodLabel: String get() = when (selectedMethod) {
+            Method.WALLET -> "Cüzdan"
+            Method.CARD   -> "Kart"
+            Method.IYZICO -> "İyzico"
+        }
 
         val formattedDuration: String get() = "${Math.round(durationMinutes)} dk"
         val formattedDistance: String get() = "${"%.1f".format(distanceKm).replace('.', ',')} km"
@@ -45,6 +51,7 @@ object RentalPaymentContract {
         data class IyzicoPaymentSucceeded(val paymentId: String) : Intent
         data class IyzicoPaymentFailed(val reason: String)       : Intent
         data object IyzicoPaymentCancelled                       : Intent
+        data object PaymentSuccessDialogConfirmed                : Intent
     }
 
     sealed interface Effect {

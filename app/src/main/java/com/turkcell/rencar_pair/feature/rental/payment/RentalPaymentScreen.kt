@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -33,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -144,6 +146,30 @@ fun RentalPaymentScreen(
 
         PayButton(state = state, onIntent = onIntent)
     }
+
+    if (state.showPaymentSuccessDialog) {
+        PaymentSuccessDialog(state = state, onIntent = onIntent)
+    }
+}
+
+@Composable
+private fun PaymentSuccessDialog(
+    state: RentalPaymentContract.State,
+    onIntent: (RentalPaymentContract.Intent) -> Unit
+) {
+    val onConfirm = { onIntent(RentalPaymentContract.Intent.PaymentSuccessDialogConfirmed) }
+    AlertDialog(
+        onDismissRequest = onConfirm,
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Tamam")
+            }
+        },
+        title = { Text("Ödeme başarılı") },
+        text  = {
+            Text("${state.formattedTotalPrice} tutarındaki ödemen ${state.paymentMethodLabel} ile alındı.")
+        }
+    )
 }
 
 @Composable
