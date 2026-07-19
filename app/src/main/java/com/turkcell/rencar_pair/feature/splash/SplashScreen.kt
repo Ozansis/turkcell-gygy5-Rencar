@@ -33,7 +33,7 @@ fun SplashScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Image(
-                painter = painterResource(R.drawable.ic_launcher_foreground),
+                painter = painterResource(R.drawable.ic_car_marker),
                 contentDescription = null,
                 modifier = Modifier.size(96.dp)
             )
