@@ -21,7 +21,8 @@ object RentalPaymentContract {
         val selectedCardId: String? = null,
         val isLoading: Boolean = false,
         val isPaying: Boolean = false,
-        val errorMessage: String? = null
+        val errorMessage: String? = null,
+        val showIyzicoDialog: Boolean = false
     ) {
         val vehicleTitle: String get() = "$brand $model"
         val usageFee: Double get() = (totalPrice - startFee - serviceFee).coerceAtLeast(0.0)
@@ -38,13 +39,15 @@ object RentalPaymentContract {
     }
 
     sealed interface Intent {
-        data class MethodSelected(val method: Method) : Intent
-        data class CardSelected(val cardId: String)   : Intent
-        data object PayClicked                        : Intent
+        data class MethodSelected(val method: Method)            : Intent
+        data class CardSelected(val cardId: String)              : Intent
+        data object PayClicked                                   : Intent
+        data class IyzicoPaymentSucceeded(val paymentId: String) : Intent
+        data class IyzicoPaymentFailed(val reason: String)       : Intent
+        data object IyzicoPaymentCancelled                       : Intent
     }
 
     sealed interface Effect {
         data class NavigateToHistory(val rentalId: String) : Effect
-        data class ShowInfo(val message: String)           : Effect
     }
 }

@@ -2374,3 +2374,269 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   çağrılmadığından (Wallet/Cards altyapı batch'leriyle tutarlı olarak)
   runtime/network testi yapılmadı — WebView bileşeni ve Ödeme ekranına
   bağlama ayrı, sonraki batch'lerin konusu.
+
+### 2026-07-19 — Iyzico Checkout Form paylaşılan WebView ödeme bileşeni eklendi
+
+- **Ne yapıldı:** `IyzicoRepository`'yi kullanan, bağımsız/tekrar
+  kullanılabilir bir WebView ödeme bileşeni `ui/components/` altına (bir
+  NavHost hedefi DEĞİL, koşullu gösterilen tam ekran `Dialog`) 4 dosya
+  olarak eklendi: `IyzicoPaymentWebViewContract.kt` (State/Intent/Effect),
+  `IyzicoPaymentWebViewViewModel.kt` (`@AssistedInject`,
+  rentalId/price/description parametreli), `IyzicoPaymentWebViewScreen.kt`
+  (`AndroidView` ile `android.webkit.WebView`), `IyzicoPaymentWebViewRoute.kt`
+  (`Dialog` + Hilt `creationCallback`). Akış: initialize → paymentPageUrl
+  WebView'da açılır → `WebViewClient.shouldOverrideUrlLoading` URL'in
+  `iyzico/checkout-form/callback` path'ini içerip içermediğini POLLING
+  OLMADAN dinler → yakalanınca WebView içerik göstermeyi durdurur (`return
+  true`) ve elde tutulan token ile `getCheckoutFormResult` TEK SEFERLİK
+  çağrılır → `paymentStatus` sonucuna göre `ShowPaymentSucceeded`/
+  `ShowPaymentFailed` effect'i.
+- **Değişen dosyalar (yeni):** `ui/components/IyzicoPaymentWebViewContract.kt`,
+  `IyzicoPaymentWebViewViewModel.kt`, `IyzicoPaymentWebViewScreen.kt`,
+  `IyzicoPaymentWebViewRoute.kt`.
+- **Neden bu şekilde yapıldı:** `docs/api/openapi.json`'daki açıklamaya göre
+  (`POST /iyzico/checkout-form/callback` — istemci tarafından gönderilen bir
+  `callbackUrl` alanı yok) callback path'i backend'de sabit; bu yüzden
+  token'ı callback URL'inden parse etmeye gerek kalmadan yalnızca "bu path'e
+  ulaşıldı mı" kontrolü yeterli görüldü, token adım 1'den beri bellekte
+  tutuluyor. Bileşen `feature/` değil `ui/components/` altına konuldu çünkü
+  bir nav hedefi değil — `mvi-overview.md`'nin Route/Screen/Contract/
+  ViewModel dörtlüsü yine de birebir uygulandı, yalnızca paket yerleşimi
+  farklı; Effect isimlendirmesi (`ShowPaymentSucceeded`/`ShowPaymentFailed`/
+  `ShowPaymentCancelled`) `mvi-contracts.md`'nin `Show` prefix kuralına
+  esnetilmeden uyuyor. "İptal" (kullanıcı WebView'ı manuel kapattı) ile
+  "hata" kasıtlı olarak ayrı effect'ler (`ShowPaymentCancelled` vs
+  `ShowPaymentFailed`) — kullanıcının açık gereksinimiydi. Terminal
+  effect'lerin yalnızca bir kez gönderilmesi için `hasResolved` guard'ı
+  eklendi (örn. callback yakalanırken kullanıcı aynı anda geri tuşuna
+  basarsa iki effect birden gitmesin diye); `sendEffect()` yine tek
+  Channel-gönderim noktası olarak korundu. `paymentPageUrl` boş/null
+  gelirse WebView hiç açılmadan `errorMessage` state'e yazılıp
+  `ShowPaymentFailed` effect'i gönderiliyor (kullanıcı gereksinimiydi).
+  `Dialog`'un varsayılan `dismissOnBackPress = true` davranışı geri tuşunu
+  zaten `Dismissed` Intent'ine yönlendirdiğinden ayrı bir `BackHandler`
+  eklenmedi; `dismissOnClickOutside = false` yapıldı (ödeme akışının
+  yanlışlıkla dışarı tıklamayla iptali önlensin diye).
+- **Bilinen sınırlama (çözülmedi, sonraki bağlama batch'ine not):**
+  `hiltViewModel(creationCallback = ...)` en yakın `ViewModelStoreOwner`
+  kapsamında sınıf+key'e göre önbelleğe alınıyor. Bu bileşen bir NavHost
+  hedefi olmadığından, çağıran ekran aynı `ViewModelStoreOwner`'da kalırken
+  kullanıcı ödemeyi iptal edip tekrar denerse Compose aynı ViewModel
+  örneğini geri getirebilir ve `init` (`initializeCheckoutForm`) TEKRAR
+  ÇALIŞMAYABİLİR. Bağlama olmadan test edilemeyecek bir varsayım üzerine
+  kurmamak için bu batch'te bilinçli olarak çözülmedi; önerilen çözüm:
+  sonraki bağlama batch'inde `hiltViewModel(key = ...)` ile dialog her
+  açıldığında benzersiz bir key (örn. `remember { UUID.randomUUID()
+  .toString() }`) verilmesi.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. İlk denemede KSP hatası çıktı: `@AssistedInject`
+  constructor'da `rentalId`/`description` ikisi de `String` tipinde olduğu
+  için "duplicate @Assisted type" hatası verdi; `@Assisted("rentalId")`/
+  `@Assisted("description")` identifier'larıyla (hem constructor hem
+  `Factory.create` imzasında) düzeltildi, ikinci derlemede BUILD
+  SUCCESSFUL. Bileşen hiçbir yerden çağrılmadığından (bağlama sonraki
+  batch) gerçek WebView/İyzico akışı runtime'da DOĞRULANAMADI.
+
+### 2026-07-19 — İyzico ödemesi Ödeme ekranına bağlandı (2 batch, 6 dosya)
+
+- **Ne yapıldı:** `RentalPaymentViewModel.handlePayClicked`'daki İyzico
+  dalı artık "yakında eklenecek" Toast'ı göstermiyor; gerçek Checkout Form
+  WebView akışını tetikliyor. Batch 1 (veri katmanı düzeltmesi):
+  `PayRentalDto`'ya eksik `iyzicoPaymentId: String? = null` alanı eklendi
+  (openapi şemasında zaten vardı, Kotlin DTO'da eksikti — bu oturumun
+  başında doğrulanmıştı) ve `RentalsRepository.payRental`'a aynı isimli
+  parametre eklendi. Batch 2 (MVI bağlama):
+  `RentalPaymentContract.State`'e `showIyzicoDialog: Boolean` eklendi;
+  `Intent`'e `IyzicoPaymentSucceeded(paymentId)`/`IyzicoPaymentFailed(reason)`/
+  `IyzicoPaymentCancelled` eklendi; `RentalPaymentViewModel` bu üç intent'i
+  karşılayan `handle*` fonksiyonlarıyla genişletildi;
+  `RentalPaymentRoute.kt`, `state.showIyzicoDialog` true iken
+  `IyzicoPaymentWebViewRoute`'u koşullu render edip üç callback'ini yeni
+  Intent'lere çeviriyor; `ui/components/IyzicoPaymentWebViewRoute.kt`'ye
+  önceki batch'te not edilen "aynı ViewModel örneği geri gelebilir"
+  sınırlamasını çözen `hiltViewModel(key = remember { UUID.randomUUID()
+  .toString() }, ...)` eklendi.
+- **Değişen dosyalar:** `data/network/dto/RentalDtos.kt`,
+  `data/repository/RentalsRepository.kt`,
+  `feature/rental/payment/RentalPaymentContract.kt`,
+  `feature/rental/payment/RentalPaymentViewModel.kt`,
+  `feature/rental/payment/RentalPaymentRoute.kt`,
+  `ui/components/IyzicoPaymentWebViewRoute.kt`.
+- **Neden bu şekilde yapıldı:** Toplam 6 dosya Agent.md §2.1'in 5 dosya
+  sınırını aştığından iş, 2026-07-19'daki "Kiralama Ödemesi ekranı"
+  emsaliyle tutarlı olarak 2 bağlı batch'e bölünüp TEK onayla sunuldu.
+  `handlePayClicked`'ın İyzico dalı artık gerçek ödeme çağrısı yapmıyor —
+  yalnızca `showIyzicoDialog = true` set edip WebView sonucunu bekliyor;
+  gerçek `rentalsRepository.payRental(..., method = "IYZICO",
+  iyzicoPaymentId = paymentId)` çağrısı yalnızca WebView
+  `ShowPaymentSucceeded` effect'i döndükten SONRA yapılıyor (`cardId`
+  gönderilmiyor — yalnız CARD yönteminde zorunlu). Başarı sonrası akış
+  WALLET/CARD ile BİREBİR aynı (`NavigateToHistory` effect'i, Kiralamalarım'a
+  düşme). `IyzicoPaymentFailed` mevcut kalıcı `State.errorMessage`
+  deseniyle (Wallet/HistoryDetail emsali) gösteriliyor — dead-end yok,
+  kullanıcı yöntem değiştirip tekrar deneyebiliyor.
+  `IyzicoPaymentCancelled` KASITLI olarak `errorMessage`'a dokunmuyor,
+  yalnızca dialog'u kapatıyor — iptal ile hata kullanıcının açık isteğiyle
+  ayrı tutuldu. `Effect.ShowInfo` (yalnızca "İyzico yakında" mesajı için
+  vardı) bu batch'te göndereni kalmadığından ölü kod olarak TAMAMEN
+  kaldırıldı; `RentalPaymentRoute.kt`'deki karşılık gelen `Toast` dalı ve
+  artık kullanılmayan `Toast`/`LocalContext` importları da temizlendi.
+  `IyzicoPaymentWebViewRoute`'a eklenen `key` parametresinin varlığı,
+  kaynak koda inilerek (`hilt-lifecycle-viewmodel-compose-1.4.0-sources.jar`
+  içindeki `HiltViewModel.kt`) doğrulandı — uydurulmadı; kullanılan
+  overload'da `key: String? = null` zaten mevcut. `state.showIyzicoDialog`
+  `false → true` geçtiğinde `RentalPaymentRoute`'taki `if` bloğu
+  `IyzicoPaymentWebViewRoute`'u SIFIRDAN oluşturduğundan, `remember { UUID
+  .randomUUID().toString() }` her açılışta yeni bir key üretiyor ve
+  `hiltViewModel` ViewModelStore'da her seferinde YENİ bir örnek yaratıyor
+  (`init`/`initializeCheckoutForm` gerçekten tekrar çalışıyor) — eski
+  key'ler altındaki örnekler ekran kapanana kadar bellekte kalıyor
+  (bilinen, kabul edilebilir bir trade-off).
+- **Kendi kontrolüm:** Her iki batch'ten sonra ayrı ayrı
+  `./gradlew :app:compileDebugKotlin` çalıştırıldı, ikisinde de BUILD
+  SUCCESSFUL (yalnızca `RentalsRepository.kt`'de projede zaten var olan,
+  bu değişiklikle ilgisiz bir `@ApplicationContext` derleyici uyarısı).
+  Bağlı emülatör/cihaz olmadığından gerçek İyzico akışı (Öde → İyzico seç
+  → WebView açılır → test kartıyla öde → callback yakalanır →
+  Kiralamalarım'a düşme; iptal senaryosu; hata senaryosu) runtime'da
+  DOĞRULANAMADI — sonraki oturumda cihazda elle test edilmeli.
+
+### 2026-07-19 — İyzico WebView callback yakalanamıyor: teşhis logu eklendi (kök neden BULUNAMADI)
+
+- **Ne yapıldı:** Kullanıcı bildirdi: gerçek cihazda ödeme İyzico'nun
+  sayfasında "Ödeme Tamamlandı" gösteriyor ama `shouldOverrideUrlLoading`
+  hiç tetiklenmiyor, WebView kapanmıyor, kullanıcı manuel kapatınca
+  (aslında başarılı olan ödeme) "iptal edildi" gibi davranıyor. Kod
+  DEĞİŞTİRİLMEDEN önce iki şey araştırıldı: (1) `docs/api/openapi.json`
+  `InitializeCheckoutFormDto` şeması (satır 5097-5141) yeniden okundu —
+  `callbackUrl` diye bir property YOK (yalnız `price`/`description`/
+  `basketId`/`enabledInstallments`/`buyer`); (2)
+  `IyzicoRepository.initializeCheckoutForm` doğrulandı — zaten şemada
+  olmayan bir alanı dolduramayacağından yalnızca
+  `price`/`description`/`basketId` gönderiyor. Sonuç: istemci callback
+  URL'ini seçemiyor, backend kendi sabit `callbackUrl`'ini kullanıyor
+  olmalı. Bunun ötesinde openapi'deki "İyzico sunucudaki `POST /iyzico/
+  checkout-form/callback` adresine token gönderir" cümlesi iki farklı
+  şekilde okunabildiğinden (sunucu-sunucu webhook mu, yoksa tarayıcı
+  yönlendirmesi mi — ikisi de WebView davranışını farklı şekillerde
+  açıklar) KESİN kök neden bu oturumda belirlenemedi; `ui/components/
+  IyzicoPaymentWebViewScreen.kt`'deki `WebViewClient`'a `onPageStarted`/
+  `onPageFinished`/`shouldOverrideUrlLoading`'in HER ÜÇÜNE de geçici
+  `Log.d("IyzicoWebView", ...)` eklendi (RencarMap.kt'nin 2026-07-15
+  tarihli "TEŞHİS" bloğu emsaliyle aynı desende, `// TEŞHİS:` yorumuyla
+  işaretlendi).
+- **Değişen dosyalar:** `ui/components/IyzicoPaymentWebViewScreen.kt`
+  (yalnızca geçici log — WebView akış mantığı değişmedi).
+- **Neden bu şekilde yapıldı:** Agent.md §2.2 (uydurma yasağı) gereği kök
+  neden hakkında kanıtsız bir varsayımla kod DÜZELTİLMEDİ. `onPageStarted`/
+  `onPageFinished` yalnızca TAM SAYFA navigasyonunda tetiklenir (AJAX/
+  `fetch` çağrılarında tetiklenmez) — bu ayrım tam olarak aranan kanıt:
+  ödeme tamamlandıktan sonra Logcat'te YENİ bir `onPageStarted`/
+  `onPageFinished` hiç görünmüyorsa, İyzico'nun sayfası saf JS ile
+  "başarılı" gösterip hiç yönlendirme yapmıyor demektir (gerçek sonuç
+  yalnızca backend'e sunucu-sunucu webhook ile gidiyor olmalı) — bu
+  durumda mevcut `shouldOverrideUrlLoading` tabanlı yaklaşım YAPISAL
+  OLARAK terk edilip başka bir tetikleyiciye (örn. kullanıcı onayı veya
+  tek seferlik gecikmeli `getCheckoutFormResult` sorgusu) geçilmesi
+  gerekecek. Eğer yeni bir navigasyon GÖRÜNÜYOR ama `CHECKOUT_FORM_
+  CALLBACK_PATH` ile eşleşmiyorsa, gerçek URL Logcat'ten okunup path
+  sabiti düzeltilecek.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Bu bir teşhis batch'i olduğundan runtime doğrulaması
+  YAPILAMADI (bağlı cihaz yok) — kullanıcı gerçek cihazda bir ödeme
+  deneyip `adb logcat -s IyzicoWebView` çıktısını paylaştığında kök neden
+  netleştirilip kalıcı düzeltme planlanacak.
+- **Hatırlatma:** `IyzicoPaymentWebViewScreen.kt`'deki üç `Log.d` satırı
+  KALICI DEĞİL — kök neden bulunup kalıcı düzeltme yapıldığında
+  kaldırılmalı.
+
+### 2026-07-19 — İyzico WebView kök nedeni bulundu ve düzeltildi: callback yakalama onPageStarted'a taşındı
+
+- **Ne yapıldı:** Kullanıcı gerçek cihazda test edip Logcat sonucunu
+  paylaştı: `onPageStarted`/`onPageFinished` callback URL'ini güvenilir
+  şekilde yakalıyor ama `shouldOverrideUrlLoading` HİÇ loglanmıyor — bilinen
+  bir WebView davranışı: sunucu tarafı yönlendirmelerde (İyzico'nun
+  backend'e 302 redirect'i) `shouldOverrideUrlLoading` tetiklenmeyebiliyor.
+  Bir önceki oturumun iki hipotezinden biri ("URL değişimi hiç olmuyor,
+  saf JS/webhook") ELENDİ — üçüncü, daha önce düşünülmemiş bir olasılık
+  (native WebView engine seviyesinde 302'nin `shouldOverrideUrlLoading`'i
+  atlaması) doğru çıktı. `ui/components/IyzicoPaymentWebViewScreen.kt`'de
+  `CheckoutFormWebView`'daki `WebViewClient` yeniden düzenlendi: callback
+  path kontrolü artık `onPageStarted` içinde yapılıyor (URL eşleşirse
+  `onCallbackUrlReached` orada tetikleniyor); `shouldOverrideUrlLoading`
+  hâlâ aynı kontrolü yapıyor (JS/link tabanlı bir navigasyon ihtimaline
+  karşı belt-and-braces) ama artık HER ZAMAN `false` döndürüyor (WebView'ın
+  kendi yükleme akışını bloklamıyor — zaten bu yöntemin sunucu
+  yönlendirmelerinde tetiklenmediği kanıtlandı, blocking mantığı bu yöntemde
+  anlamsız hale geldi). İki tetikleyici noktanın (`onPageStarted` VE
+  `shouldOverrideUrlLoading`) `onCallbackUrlReached`'i BİRDEN FAZLA kez
+  çağırmaması için ortak bir `callbackHandled` bayrağı (WebView factory
+  closure'ında) + paylaşılan `maybeHandleCallback(url)` yardımcı fonksiyonu
+  eklendi. Üç `Log.d` satırı (`onPageStarted`/`onPageFinished`/
+  `shouldOverrideUrlLoading`) KALICI OLARAK bırakıldı — kullanıcı düzeltme
+  sonrası tekrar Logcat ile doğrulama isteyeceğinden bilinçli olarak
+  kaldırılmadı; TEŞHİS yorumu artık kök nedeni ve kalıcı çözümü açıklayan
+  bir yorumla güncellendi (RencarMap.kt emsalinde olduğu gibi kök neden
+  bulununca teşhis yorumları kalıcı açıklamaya dönüştürüldü, silinmedi).
+- **Değişen dosyalar:** `ui/components/IyzicoPaymentWebViewScreen.kt`.
+- **Neden bu şekilde yapıldı:** `shouldOverrideUrlLoading`'in artık her
+  zaman `false` dönmesi BİLİNÇLİ bir karar: önceki davranışı (path
+  eşleşirse `true`, WebView'ın yüklemeyi durdurması) korumak, bu yöntemin
+  zaten güvenilmez olduğu (kök nedenin ta kendisi) kanıtlanmış bir yerde
+  gereksiz bir dal bırakırdı; asıl "yükleme durdurma" işlevi zaten gerekli
+  değil çünkü `onCallbackUrlReached` tetiklendiğinde `RentalPaymentRoute`
+  `state.showIyzicoDialog`'u `false` yaparak Dialog'u komple kaldırıyor
+  (WebView instance'ı kısa süre içinde tamamen dispose ediliyor). Ortak
+  `callbackHandled` bayrağı olmadan, `onPageStarted` VE
+  `shouldOverrideUrlLoading` aynı callback URL'i için (bazı WebView
+  sürümlerinde ikisi de tetiklenebiliyor) İKİ AYRI `getCheckoutFormResult`
+  çağrısına yol açabilirdi — ViewModel tarafındaki `hasResolved` guard'ı
+  yalnızca EFFECT gönderimini tekilleştiriyordu, gereksiz ikinci ağ
+  çağrısını engellemiyordu; bu yüzden tekilleştirme kaynağa (WebView
+  katmanına) taşındı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Bağlı cihaz olmadığından bu oturumda runtime testi
+  YAPILAMADI — kullanıcı gerçek cihazda tekrar test edip Logcat'i
+  (`adb logcat -s IyzicoWebView`) paylaşacak; `onPageStarted` çağrısında
+  callback path'inin gerçekten yakalandığı VE WebView dialog'unun kapanıp
+  `getCheckoutFormResult`'un tetiklendiği doğrulanmalı.
+
+### 2026-07-19 — İyzico Sandbox ödemesi uçtan uca doğrulandı + teşhis logları temizlendi
+
+- **Ne yapıldı:** Kullanıcı gerçek cihazda İyzico Sandbox ile uçtan uca bir
+  ödeme denedi; Logcat kanıtı PAID durumunu ve doğru `iyzicoPaymentId`'yi
+  gösterdi — `onPageStarted` tabanlı callback yakalama düzeltmesi (bir
+  önceki girdi) çalıştığı doğrulandı. Ardından `ui/components/
+  IyzicoPaymentWebViewScreen.kt`'deki üç geçici `Log.d("IyzicoWebView",
+  ...)` satırı (URL loglama — `onPageStarted`/`onPageFinished`/
+  `shouldOverrideUrlLoading` içinde) kaldırıldı; artık kullanılmayan
+  `android.util.Log` importu temizlendi. `onPageFinished` override'ı
+  yalnızca bu log satırı için vardı ve kaldırılınca `super.onPageFinished(...)`
+  çağırmaktan başka hiçbir şey yapmayan ölü bir override'a dönüştüğünden
+  TAMAMEN silindi (WebViewClient'ın varsayılan davranışı zaten yeterli).
+  `onPageStarted`/`shouldOverrideUrlLoading` içindeki callback yakalama
+  mantığı (`maybeHandleCallback` çağrıları) DOKUNULMADAN korundu — yalnızca
+  log satırları kaldırıldı. Fabrika closure'ındaki açıklama yorumu, artık
+  var olmayan "Logcat'te doğrulandı" ifadesinden arındırılıp yalnızca
+  mimari kararı (neden `onPageStarted`, neden `callbackHandled` bayrağı)
+  anlatacak şekilde sadeleştirildi.
+- **Değişen dosyalar:** `ui/components/IyzicoPaymentWebViewScreen.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcının gerekçesi: token içeren
+  URL'leri (İyzico callback URL'i token query/path parametresi taşıyabilir)
+  production Logcat'ine düz metin yazmak hafif bir gizlilik riski —
+  `AuthInterceptor`'ın 2026-07-14 tarihli release/debug log seviyesi
+  ayrımıyla (parola/token'ların release Logcat'ine yazılmaması) aynı
+  prensip. Log satırları zaten yalnızca kök nedeni teşhis etmek için
+  geçiciydi (önceki iki girdide böyle işaretlenmişti) ve kök neden
+  bulunup düzeltme doğrulandığından artık işlevsizdi.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL, yeni uyarı yok. Gerçek cihaz testi kullanıcı
+  tarafından BİR ÖNCEKİ adımda (log'lu haliyle) zaten yapılmıştı; bu
+  batch yalnızca log satırlarını kaldırdığından ve callback yakalama
+  mantığına dokunmadığından ayrı bir runtime testi gerektirmiyor — yine
+  de sonraki bir ödeme denemesinde davranışın aynı kaldığı gözle
+  doğrulanabilir.
+- **İyzico entegrasyonu artık uçtan uca ÇALIŞIYOR:** Checkout Form
+  initialize → WebView → callback yakalama → `getCheckoutFormResult` →
+  `RentalsRepository.payRental(..., iyzicoPaymentId)` → Kiralamalarım
+  akışının tamamı Sandbox'ta doğrulandı.

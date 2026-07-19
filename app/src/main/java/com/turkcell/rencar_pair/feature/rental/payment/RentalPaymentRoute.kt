@@ -1,12 +1,11 @@
 package com.turkcell.rencar_pair.feature.rental.payment
 
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.turkcell.rencar_pair.ui.components.IyzicoPaymentWebViewRoute
 
 @Composable
 fun RentalPaymentRoute(
@@ -17,15 +16,30 @@ fun RentalPaymentRoute(
     )
 ) {
     val state by viewModel.state.collectAsState()
-    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
             when (effect) {
                 is RentalPaymentContract.Effect.NavigateToHistory -> onNavigateToHistory()
-                is RentalPaymentContract.Effect.ShowInfo -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    if (state.showIyzicoDialog) {
+        IyzicoPaymentWebViewRoute(
+            rentalId = rentalId,
+            price = state.totalPrice,
+            description = "${state.vehicleTitle} kiralama ödemesi",
+            onPaymentSucceeded = { paymentId ->
+                viewModel.onIntent(RentalPaymentContract.Intent.IyzicoPaymentSucceeded(paymentId))
+            },
+            onPaymentFailed = { reason ->
+                viewModel.onIntent(RentalPaymentContract.Intent.IyzicoPaymentFailed(reason))
+            },
+            onPaymentCancelled = {
+                viewModel.onIntent(RentalPaymentContract.Intent.IyzicoPaymentCancelled)
+            }
+        )
     }
 
     RentalPaymentScreen(state = state, onIntent = viewModel::onIntent)
