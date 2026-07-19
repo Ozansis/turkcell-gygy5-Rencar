@@ -1,5 +1,6 @@
 package com.turkcell.rencar_pair.data.repository
 
+import com.turkcell.rencar_pair.data.local.CurrentUserSession
 import com.turkcell.rencar_pair.data.local.TokenStore
 import com.turkcell.rencar_pair.data.network.AuthApiService
 import com.turkcell.rencar_pair.data.network.dto.AuthResponseDto
@@ -43,7 +44,8 @@ fun Response<*>.extractErrorMessage(): String {
 @Singleton
 class AuthRepository @Inject constructor(
     private val authApiService: AuthApiService,
-    private val tokenStore: TokenStore
+    private val tokenStore: TokenStore,
+    private val currentUserSession: CurrentUserSession
 ) {
 
     suspend fun register(
@@ -58,6 +60,7 @@ class AuthRepository @Inject constructor(
         }
         if (result is AuthResult.Success) {
             tokenStore.saveTokens(result.data.accessToken, result.data.refreshToken)
+            currentUserSession.updateRole(result.data.user.role)
         }
         return when (result) {
             is AuthResult.Success -> AuthResult.Success(Unit)
@@ -73,6 +76,7 @@ class AuthRepository @Inject constructor(
         val result = safeCall { authApiService.verifyOtp(VerifyOtpDto(phone, code)) }
         if (result is AuthResult.Success) {
             tokenStore.saveTokens(result.data.accessToken, result.data.refreshToken)
+            currentUserSession.updateRole(result.data.user.role)
         }
         return when (result) {
             is AuthResult.Success -> AuthResult.Success(Unit)
@@ -87,6 +91,7 @@ class AuthRepository @Inject constructor(
         val result = safeCall { authApiService.refresh(RefreshTokenDto(refreshToken)) }
         if (result is AuthResult.Success) {
             tokenStore.saveTokens(result.data.accessToken, result.data.refreshToken)
+            currentUserSession.updateRole(result.data.user.role)
         }
         return result
     }
@@ -98,6 +103,7 @@ class AuthRepository @Inject constructor(
             // Ağ hatası olsa bile kullanıcı yerel olarak çıkış yapabilmeli.
         } finally {
             tokenStore.clear()
+            currentUserSession.updateRole(null)
         }
     }
 

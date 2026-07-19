@@ -21,7 +21,7 @@ import java.io.File
 @Composable
 fun SelfieRoute(
     licenseFlowViewModel: LicenseFlowViewModel,
-    onNavigateToConfirmation: () -> Unit,
+    onNavigateToHome: () -> Unit,
     onNavigateBack: () -> Unit,
     viewModel: SelfieViewModel = viewModel()
 ) {
@@ -61,7 +61,7 @@ fun SelfieRoute(
                     takePictureLauncher.launch(uri)
                 }
                 SelfieContract.Effect.TriggerUpload          -> licenseFlowViewModel.uploadIfReady()
-                SelfieContract.Effect.NavigateToConfirmation -> onNavigateToConfirmation()
+                SelfieContract.Effect.NavigateToHome         -> onNavigateToHome()
                 is SelfieContract.Effect.ShowError           -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
                 SelfieContract.Effect.NavigateBack           -> onNavigateBack()
             }

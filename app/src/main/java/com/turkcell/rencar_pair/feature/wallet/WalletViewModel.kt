@@ -2,6 +2,7 @@ package com.turkcell.rencar_pair.feature.wallet
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.turkcell.rencar_pair.data.local.CurrentUserSession
 import com.turkcell.rencar_pair.data.network.dto.CardResponseDto
 import com.turkcell.rencar_pair.data.network.dto.WalletTransactionDto
 import com.turkcell.rencar_pair.data.repository.AuthResult
@@ -16,6 +17,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +31,8 @@ private val DATE_LABEL_FORMATTER =
 @HiltViewModel
 class WalletViewModel @Inject constructor(
     private val walletRepository: WalletRepository,
-    private val cardsRepository: CardsRepository
+    private val cardsRepository: CardsRepository,
+    private val currentUserSession: CurrentUserSession
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(WalletContract.State())
@@ -38,8 +41,11 @@ class WalletViewModel @Inject constructor(
     private val _effect = Channel<WalletContract.Effect>(Channel.BUFFERED)
     val effect: Flow<WalletContract.Effect> = _effect.receiveAsFlow()
 
+    private var lastKnownRole: String? = null
+
     init {
         loadWalletAndCards()
+        observeRoleChanges()
     }
 
     fun onIntent(intent: WalletContract.Intent) {
@@ -76,6 +82,17 @@ class WalletViewModel @Inject constructor(
                     is AuthResult.Error -> next.copy(errorMessage = next.errorMessage ?: cardsResult.message)
                 }
                 next
+            }
+        }
+    }
+
+    private fun observeRoleChanges() {
+        viewModelScope.launch {
+            currentUserSession.role.collect { role ->
+                if (lastKnownRole == "PENDING" && role == "CUSTOMER") {
+                    loadWalletAndCards()
+                }
+                lastKnownRole = role
             }
         }
     }

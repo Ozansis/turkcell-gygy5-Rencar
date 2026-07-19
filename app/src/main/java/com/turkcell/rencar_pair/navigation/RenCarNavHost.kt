@@ -193,8 +193,10 @@ fun RenCarNavHost() {
 
                 SelfieRoute(
                     licenseFlowViewModel = licenseFlowViewModel,
-                    onNavigateToConfirmation = {
-                        navController.navigate(RenCarDestinations.CONFIRMATION)
+                    onNavigateToHome = {
+                        navController.navigate(RenCarDestinations.HOME) {
+                            popUpTo(RenCarDestinations.ONBOARDING) { inclusive = true }
+                        }
                     },
                     onNavigateBack = { navController.popBackStack() }
                 )
@@ -369,6 +371,9 @@ private fun HomeGraph(navController: NavHostController, startTab: BottomNavItem)
         },
         onNavigateToInvite = { referralCode ->
             navController.navigate(RenCarDestinations.inviteRoute(referralCode))
+        },
+        onNavigateToLicenseVerification = {
+            navController.navigate(RenCarDestinations.LICENSE_VERIFICATION)
         },
         onNavigateToLogin = {
             navController.navigate(RenCarDestinations.LOGIN) {

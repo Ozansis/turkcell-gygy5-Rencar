@@ -13,6 +13,7 @@ fun ProfileRoute(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToHelp: () -> Unit = {},
     onNavigateToInvite: (String) -> Unit = {},
+    onNavigateToLicenseVerification: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
@@ -22,11 +23,12 @@ fun ProfileRoute(
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
             when (effect) {
-                ProfileContract.Effect.NavigateToSettings   -> onNavigateToSettings()
-                ProfileContract.Effect.NavigateToHelp       -> onNavigateToHelp()
-                is ProfileContract.Effect.NavigateToInvite  -> onNavigateToInvite(effect.referralCode)
-                ProfileContract.Effect.NavigateToLogin      -> onNavigateToLogin()
-                is ProfileContract.Effect.ShowToast         -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+                ProfileContract.Effect.NavigateToSettings              -> onNavigateToSettings()
+                ProfileContract.Effect.NavigateToHelp                  -> onNavigateToHelp()
+                is ProfileContract.Effect.NavigateToInvite             -> onNavigateToInvite(effect.referralCode)
+                ProfileContract.Effect.NavigateToLicenseVerification   -> onNavigateToLicenseVerification()
+                ProfileContract.Effect.NavigateToLogin                 -> onNavigateToLogin()
+                is ProfileContract.Effect.ShowToast                    -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
             }
         }
     }
