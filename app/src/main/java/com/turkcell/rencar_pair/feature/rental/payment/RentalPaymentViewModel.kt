@@ -44,9 +44,12 @@ class RentalPaymentViewModel @AssistedInject constructor(
 
     fun onIntent(intent: RentalPaymentContract.Intent) {
         when (intent) {
-            is RentalPaymentContract.Intent.MethodSelected -> handleMethodSelected(intent.method)
-            is RentalPaymentContract.Intent.CardSelected   -> handleCardSelected(intent.cardId)
-            RentalPaymentContract.Intent.PayClicked        -> handlePayClicked()
+            is RentalPaymentContract.Intent.MethodSelected          -> handleMethodSelected(intent.method)
+            is RentalPaymentContract.Intent.CardSelected             -> handleCardSelected(intent.cardId)
+            RentalPaymentContract.Intent.PayClicked                  -> handlePayClicked()
+            is RentalPaymentContract.Intent.IyzicoPaymentSucceeded   -> handleIyzicoPaymentSucceeded(intent.paymentId)
+            is RentalPaymentContract.Intent.IyzicoPaymentFailed      -> handleIyzicoPaymentFailed(intent.reason)
+            RentalPaymentContract.Intent.IyzicoPaymentCancelled      -> handleIyzicoPaymentCancelled()
         }
     }
 
@@ -116,7 +119,7 @@ class RentalPaymentViewModel @AssistedInject constructor(
         if (!current.canPay) return
 
         if (current.selectedMethod == RentalPaymentContract.Method.IYZICO) {
-            sendEffect(RentalPaymentContract.Effect.ShowInfo("İyzico ile ödeme yakında eklenecek."))
+            _state.update { it.copy(showIyzicoDialog = true, errorMessage = null) }
             return
         }
 
@@ -137,6 +140,36 @@ class RentalPaymentViewModel @AssistedInject constructor(
                 }
             }
         }
+    }
+
+    private fun handleIyzicoPaymentSucceeded(paymentId: String) {
+        val current = _state.value
+        _state.update { it.copy(showIyzicoDialog = false, isPaying = true, errorMessage = null) }
+        viewModelScope.launch {
+            when (
+                val result = rentalsRepository.payRental(
+                    id = current.rentalId,
+                    method = RentalPaymentContract.Method.IYZICO.name,
+                    iyzicoPaymentId = paymentId
+                )
+            ) {
+                is AuthResult.Success -> {
+                    _state.update { it.copy(isPaying = false) }
+                    sendEffect(RentalPaymentContract.Effect.NavigateToHistory(current.rentalId))
+                }
+                is AuthResult.Error -> _state.update {
+                    it.copy(isPaying = false, errorMessage = result.message)
+                }
+            }
+        }
+    }
+
+    private fun handleIyzicoPaymentFailed(reason: String) {
+        _state.update { it.copy(showIyzicoDialog = false, errorMessage = reason) }
+    }
+
+    private fun handleIyzicoPaymentCancelled() {
+        _state.update { it.copy(showIyzicoDialog = false) }
     }
 
     private fun sendEffect(effect: RentalPaymentContract.Effect) {

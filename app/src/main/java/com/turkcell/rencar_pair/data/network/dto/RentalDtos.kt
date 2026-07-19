@@ -59,7 +59,8 @@ data class RentalStatsResponseDto(
 
 data class PayRentalDto(
     val method: String,
-    val cardId: String? = null
+    val cardId: String? = null,
+    val iyzicoPaymentId: String? = null
 )
 
 data class PaidCardSummaryDto(

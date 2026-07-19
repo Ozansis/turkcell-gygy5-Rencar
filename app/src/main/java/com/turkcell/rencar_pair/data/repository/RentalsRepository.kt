@@ -110,9 +110,14 @@ class RentalsRepository @Inject constructor(
         }
     }
 
-    suspend fun payRental(id: String, method: String, cardId: String?): AuthResult<PayRentalResponseDto> {
+    suspend fun payRental(
+        id: String,
+        method: String,
+        cardId: String? = null,
+        iyzicoPaymentId: String? = null
+    ): AuthResult<PayRentalResponseDto> {
         return try {
-            val response = rentalsApiService.payRental(id, PayRentalDto(method, cardId))
+            val response = rentalsApiService.payRental(id, PayRentalDto(method, cardId, iyzicoPaymentId))
             val body = response.body()
             if (response.isSuccessful && body != null) {
                 AuthResult.Success(body)
