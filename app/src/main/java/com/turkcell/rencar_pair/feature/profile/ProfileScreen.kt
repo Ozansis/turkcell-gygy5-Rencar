@@ -26,12 +26,17 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,7 +93,17 @@ fun ProfileScreen(
 
         state.license?.let { license ->
             LicenseCard(license = license)
+            Spacer(Modifier.height(12.dp))
+        }
+
+        if (state.showCheckLicenseButton) {
+            CheckLicenseButton(
+                isChecking = state.isCheckingLicense,
+                onClick    = { onIntent(ProfileContract.Intent.CheckLicenseClicked) }
+            )
             Spacer(Modifier.height(20.dp))
+        } else {
+            Spacer(Modifier.height(8.dp))
         }
 
         MenuCard(onIntent = onIntent)
@@ -97,6 +112,89 @@ fun ProfileScreen(
 
         SignOutCard(onClick = { onIntent(ProfileContract.Intent.SignOutClicked) })
     }
+
+    when (val dialog = state.licenseCheckDialog) {
+        LicenseCheckDialog.Approved -> LicenseApprovedDialog(
+            onConfirm = { onIntent(ProfileContract.Intent.LicenseCheckDialogDismissed) }
+        )
+        is LicenseCheckDialog.Rejected -> LicenseRejectedDialog(
+            reason      = dialog.reason,
+            onDismiss   = { onIntent(ProfileContract.Intent.LicenseCheckDialogDismissed) },
+            onReupload  = { onIntent(ProfileContract.Intent.ReuploadLicenseClicked) }
+        )
+        null -> Unit
+    }
+}
+
+@Composable
+private fun CheckLicenseButton(
+    isChecking: Boolean,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick   = onClick,
+        enabled   = !isChecking,
+        modifier  = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        shape     = RoundedCornerShape(12.dp),
+        colors    = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary
+        )
+    ) {
+        if (isChecking) {
+            CircularProgressIndicator(
+                modifier    = Modifier.size(18.dp),
+                color       = Color.White,
+                strokeWidth = 2.dp
+            )
+        } else {
+            Text(
+                text  = "Kontrol Et",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White
+            )
+        }
+    }
+}
+
+@Composable
+private fun LicenseApprovedDialog(onConfirm: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onConfirm,
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Tamam")
+            }
+        },
+        title = { Text("Onaylandın! 🎉") },
+        text  = { Text("Ehliyetin onaylandı, artık araç kiralayabilirsin.") }
+    )
+}
+
+@Composable
+private fun LicenseRejectedDialog(
+    reason: String?,
+    onDismiss: () -> Unit,
+    onReupload: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onReupload) {
+                Text("Ehliyeti Yeniden Yükle")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Kapat")
+            }
+        },
+        title = { Text("Ehliyet başvurun reddedildi") },
+        text  = {
+            Text(reason ?: "Lütfen bilgilerini kontrol edip yeniden yükle.")
+        }
+    )
 }
 
 @Composable

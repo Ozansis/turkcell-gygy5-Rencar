@@ -35,12 +35,15 @@ class ProfileViewModel @Inject constructor(
 
     fun onIntent(intent: ProfileContract.Intent) {
         when (intent) {
-            ProfileContract.Intent.EditProfileClicked    -> handleComingSoonClicked()
-            ProfileContract.Intent.PaymentMethodsClicked -> handleComingSoonClicked()
-            ProfileContract.Intent.SettingsClicked       -> sendEffect(ProfileContract.Effect.NavigateToSettings)
-            ProfileContract.Intent.HelpClicked           -> sendEffect(ProfileContract.Effect.NavigateToHelp)
-            ProfileContract.Intent.InviteClicked         -> handleInviteClicked()
-            ProfileContract.Intent.SignOutClicked        -> handleSignOutClicked()
+            ProfileContract.Intent.EditProfileClicked        -> handleComingSoonClicked()
+            ProfileContract.Intent.PaymentMethodsClicked     -> handleComingSoonClicked()
+            ProfileContract.Intent.SettingsClicked           -> sendEffect(ProfileContract.Effect.NavigateToSettings)
+            ProfileContract.Intent.HelpClicked               -> sendEffect(ProfileContract.Effect.NavigateToHelp)
+            ProfileContract.Intent.InviteClicked             -> handleInviteClicked()
+            ProfileContract.Intent.CheckLicenseClicked       -> handleCheckLicenseClicked()
+            ProfileContract.Intent.LicenseCheckDialogDismissed -> handleLicenseCheckDialogDismissed()
+            ProfileContract.Intent.ReuploadLicenseClicked    -> handleReuploadLicenseClicked()
+            ProfileContract.Intent.SignOutClicked            -> handleSignOutClicked()
         }
     }
 
@@ -51,6 +54,56 @@ class ProfileViewModel @Inject constructor(
     private fun handleInviteClicked() {
         val referralCode = _state.value.referralCode ?: return
         sendEffect(ProfileContract.Effect.NavigateToInvite(referralCode))
+    }
+
+    private fun handleCheckLicenseClicked() {
+        if (_state.value.isCheckingLicense) return
+        _state.update { it.copy(isCheckingLicense = true) }
+        viewModelScope.launch {
+            when (val result = licenseRepository.getStatus()) {
+                is AuthResult.Success -> handleLicenseStatusResult(result.data.status, result.data.rejectReason)
+                is AuthResult.Error -> {
+                    _state.update { it.copy(isCheckingLicense = false) }
+                    sendEffect(ProfileContract.Effect.ShowToast(result.message))
+                }
+            }
+        }
+    }
+
+    private suspend fun handleLicenseStatusResult(status: String, rejectReason: String?) {
+        when (status) {
+            "UNDER_REVIEW" -> {
+                _state.update { it.copy(isCheckingLicense = false) }
+                sendEffect(ProfileContract.Effect.ShowToast("Hâlâ inceleniyor, biraz daha bekle."))
+            }
+            "APPROVED" -> handleLicenseApproved()
+            "REJECTED" -> _state.update {
+                it.copy(isCheckingLicense = false, licenseCheckDialog = LicenseCheckDialog.Rejected(rejectReason))
+            }
+            else -> _state.update { it.copy(isCheckingLicense = false) }
+        }
+    }
+
+    private suspend fun handleLicenseApproved() {
+        when (val refreshResult = authRepository.refresh()) {
+            is AuthResult.Success -> {
+                loadProfile()
+                _state.update { it.copy(isCheckingLicense = false, licenseCheckDialog = LicenseCheckDialog.Approved) }
+            }
+            is AuthResult.Error -> {
+                _state.update { it.copy(isCheckingLicense = false) }
+                sendEffect(ProfileContract.Effect.ShowToast(refreshResult.message))
+            }
+        }
+    }
+
+    private fun handleLicenseCheckDialogDismissed() {
+        _state.update { it.copy(licenseCheckDialog = null) }
+    }
+
+    private fun handleReuploadLicenseClicked() {
+        _state.update { it.copy(licenseCheckDialog = null) }
+        sendEffect(ProfileContract.Effect.NavigateToLicenseVerification)
     }
 
     private fun handleSignOutClicked() {
@@ -70,7 +123,8 @@ class ProfileViewModel @Inject constructor(
                             isLoading    = false,
                             userName     = result.data.fullName,
                             phoneNumber  = result.data.phone ?: "",
-                            referralCode = result.data.referralCode
+                            referralCode = result.data.referralCode,
+                            role         = result.data.role
                         )
                     }
                     loadLicenseStatus()

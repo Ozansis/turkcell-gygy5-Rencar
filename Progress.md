@@ -2640,3 +2640,201 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   initialize → WebView → callback yakalama → `getCheckoutFormResult` →
   `RentalsRepository.payRental(..., iyzicoPaymentId)` → Kiralamalarım
   akışının tamamı Sandbox'ta doğrulandı.
+
+### 2026-07-19 — PostAuthNavigationResolver: PENDING + UNDER_REVIEW artık Confirmation yerine Home'a düşüyor
+
+- **Ne yapıldı:** `PostAuthNavigationResolver.resolve()` içinde ehliyet
+  durumu `UNDER_REVIEW` olan `PENDING` rollü kullanıcılar için dönüş değeri
+  `PostAuthDestination.LicensePending` yerine `PostAuthDestination.Home`
+  olarak değiştirildi (tek satır). `CUSTOMER -> Home` ve
+  `NOT_SUBMITTED`/`REJECTED -> LicenseUpload` dalları değişmedi.
+  `SplashViewModel`, `OtpViewModel`, `RegisterViewModel` dosyalarının
+  hiçbiri değiştirilmedi — üçü de zaten `PostAuthDestination.Home ->
+  Effect.NavigateToHome` dalına sahip olduğundan yeni davranışı otomatik
+  miras aldılar; `LoginViewModel`'in ise resolver'ı hiç çağırmadığı
+  (post-auth kararını OTP doğrulaması sonrası `OtpViewModel` veriyor)
+  doğrulandı, bu dosyada değişecek bir şey yoktu.
+- **Değişen dosyalar:** `domain/PostAuthNavigationResolver.kt`.
+- **Neden bu şekilde yapıldı:** `PostAuthDestination.LicensePending` enum
+  değeri kullanıcı isteğiyle SİLİNMEDİ (ileride Profil'deki "Kontrol Et"
+  butonu gibi başka bir tetikleyiciden yeniden kullanılabilir); yalnızca
+  resolver artık bu değeri döndürmüyor. Bu yüzden 3 ViewModel'deki
+  `LicensePending -> NavigateToConfirmation` dalları kod olarak yerinde
+  kaldı ama artık resolver tarafından hiç tetiklenmiyor (ulaşılmaz, silinmiş
+  değil). `ConfirmationScreen`/`ConfirmationRoute`/`RenCarNavHost`'taki
+  `CONFIRMATION` composable'ı ve Selfie akışının kendi
+  `onNavigateToConfirmation` çağrısı (ehliyet fotoğrafı gönderildikten
+  hemen sonraki ayrı, resolver'dan bağımsız akış) kullanıcı talimatıyla
+  bilinçli olarak dokunulmadan bırakıldı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Bağlı cihaz/emülatör olmadığından gerçek bir
+  `UNDER_REVIEW` hesabıyla Splash/OTP/Register akışlarının artık Home'a
+  düştüğü runtime'da DOĞRULANAMADI — sonraki oturumda `PENDING` +
+  `UNDER_REVIEW` durumundaki bir test hesabıyla (uygulamayı kapat-aç,
+  login+OTP, register sonrası) elle test edilmeli; ayrıca `NOT_SUBMITTED`/
+  `REJECTED` ve `CUSTOMER` hesaplarıyla regresyon kontrolü yapılmalı.
+
+### 2026-07-19 — İlk kayıt akışında da Confirmation'a düşme sorunu giderildi: SelfieViewModel artık Home'a yönlendiriyor
+
+- **Ne yapıldı:** Bir önceki girdi yalnızca YENİDEN GİRİŞ senaryosunu
+  (`PostAuthNavigationResolver`) düzeltmişti; ehliyet+selfie İLK KEZ
+  gönderildiğinde `SelfieViewModel`'in kendi `onNavigateToConfirmation`
+  çağrısı hâlâ APPROVED olmadan "Devam Et"i disabled tutan Confirmation
+  ekranına gidiyordu. `SelfieContract.Effect.NavigateToConfirmation`
+  `NavigateToHome` ile değiştirildi; yeni `Effect.ShowInfo(message: String)`
+  eklendi. `SelfieViewModel.handleUploadStateChanged`'de `isUploaded == true`
+  dalı artık önce `ShowInfo("Ehliyetin gönderildi, inceleniyor.")` sonra
+  `NavigateToHome` gönderiyor. `SelfieRoute.kt`'nin `onNavigateToConfirmation`
+  parametresi `onNavigateToHome` olarak yeniden adlandırıldı, `ShowInfo`
+  Toast ile gösteriliyor. `RenCarNavHost.kt`'deki `SELFIE_VERIFICATION`
+  composable'ı artık `SelfieRoute`'a `navController.navigate(HOME) {
+  popUpTo(ONBOARDING) { inclusive = true } }` geçiyor.
+- **Değişen dosyalar:** `feature/auth/selfie/SelfieContract.kt`,
+  `feature/auth/selfie/SelfieViewModel.kt`, `feature/auth/selfie/SelfieRoute.kt`,
+  `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcı ilk talimatta "Tek dosya
+  (SelfieViewModel.kt) değişecek" varsaymıştı; kod okunduğunda
+  `SelfieRoute.kt`'nin imzasının (`onNavigateToConfirmation`) ve
+  `RenCarNavHost.kt`'deki kablolamanın da değişmesi gerektiği görüldü —
+  bu, kullanıcıya raporlanıp onay alındıktan sonra 4 dosyalık bir batch
+  olarak uygulandı (Agent.md §2.1 sınırı içinde). `popUpTo(ONBOARDING)`
+  deseni uydurulmadı — `ConfirmationRoute`'un kendi `onNavigateToHome`'unda
+  zaten kullandığı (`RenCarNavHost.kt`) birebir aynı desen tekrar
+  kullanıldı. Eski `Effect.NavigateToConfirmation` hiçbir yerden
+  üretilmez/tüketilmez hale geldiğinden (resolver görevindeki
+  `LicensePending`'in aksine, burada "gelecekte lazım olabilir" notu
+  yoktu), Iyzico akışındaki ölü `ShowInfo` effect'inin kaldırılması
+  emsaline uyularak TAMAMEN silindi, ulaşılmaz kod olarak bırakılmadı.
+  Bilgi Toast'ı `LENGTH_LONG` ile gösteriliyor (mevcut `ShowError`
+  `LENGTH_SHORT` kullanıyor ama bu mesaj artık gösterilmeyen bir ekranın
+  yerini tuttuğundan okunması için daha uzun süre tercih edildi).
+  `ConfirmationScreen`/`ConfirmationRoute`/`ConfirmationViewModel`/
+  `ConfirmationContract` talimat gereği DOKUNULMADAN bırakıldı.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Bağlı cihaz/emülatör olmadığından ehliyet+selfie ilk
+  kez gönderildiğinde Toast'ın göründüğü ve Home'a düştüğü runtime'da
+  DOĞRULANAMADI — sonraki oturumda yeni bir hesapla uçtan uca (register →
+  ehliyet fotoğrafı → selfie → yükleme tamamlanınca Toast + Home) elle
+  test edilmeli.
+
+### 2026-07-19 — Selfie'de Toast yerine AlertDialog + Profil'e "Kontrol Et" butonu (3 batch, 10 dosya)
+
+- **Ne yapıldı:** Bir önceki girdideki `ShowInfo` Toast'ı, kullanıcı
+  "Tamam"a basana kadar açık kalması gereken bir `AlertDialog`'a çevrildi
+  (Batch 1). `SelfieContract.Effect.ShowInfo` kaldırıldı; `State`'e
+  `showLicenseSubmittedDialog: Boolean` eklendi; `handleUploadStateChanged`
+  artık `isUploaded` olduğunda bu alanı `true` yapıyor (Effect değil, State
+  — mvi-contracts.md'nin "State'e yansıtılabilecek hiçbir şey Effect
+  olmamalıdır" kuralı gereği). Yeni `Intent.LicenseSubmittedDialogConfirmed`
+  dialog'u kapatıp ardından `NavigateToHome` effect'i gönderiyor (sıra:
+  dialog kapat → Home'a git). `SelfieScreen.kt`'ye mesajı gösteren
+  `AlertDialog` eklendi.
+  Ardından Profil ekranına, yalnızca `role == "PENDING"` iken görünen bir
+  "Kontrol Et" butonu eklendi (Batch 2): `ProfileContract.State`'e `role`,
+  `isCheckingLicense`, `licenseCheckDialog` (yeni top-level
+  `sealed interface LicenseCheckDialog { Approved; data class Rejected(reason) }`)
+  eklendi. `ProfileViewModel.handleCheckLicenseClicked()`
+  `licenseRepository.getStatus()` çağırıyor: `UNDER_REVIEW` →
+  `ShowToast("Hâlâ inceleniyor, biraz daha bekle.")`; `APPROVED` →
+  `authRepository.refresh()` (yeni CUSTOMER rollü token) başarılıysa
+  `loadProfile()` (rozet/buton günceller) + `Approved` dialog'u; `REJECTED`
+  → `rejectReason`'ı taşıyan `Rejected` dialog'u ("Ehliyeti Yeniden Yükle"
+  seçeneğiyle); ağ hatası → `ShowToast(result.message)` (dead-end yok, buton
+  tekrar aktif). Son olarak (Batch 3) `MainScaffold.kt` ve
+  `RenCarNavHost.kt`'deki `HomeGraph`, Profil'in "Ehliyeti Yeniden Yükle"
+  seçiminin kök `navController` ile `LICENSE_VERIFICATION`'a gidebilmesi
+  için `onNavigateToLicenseVerification` callback'iyle kablolandı.
+- **Değişen dosyalar:**
+  Batch 1 — `feature/auth/selfie/SelfieContract.kt`,
+  `feature/auth/selfie/SelfieViewModel.kt`,
+  `feature/auth/selfie/SelfieScreen.kt`, `feature/auth/selfie/SelfieRoute.kt`.
+  Batch 2 — `feature/profile/ProfileContract.kt`,
+  `feature/profile/ProfileViewModel.kt`, `feature/profile/ProfileRoute.kt`,
+  `feature/profile/ProfileScreen.kt`.
+  Batch 3 — `navigation/MainScaffold.kt`, `navigation/RenCarNavHost.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcı "dosya sayısını netleştir" demişti;
+  kod okunduğunda iki isteğin toplam 10 dosyayı etkilediği görüldü (Agent.md
+  §2.1'in 5 dosya sınırını aşıyor) — 2026-07-19 tarihli Iyzico girdisindeki
+  "birden fazla batch, TEK onay" emsaline uyularak 3 batch'e bölünüp tek
+  seferde onay alındı, her batch sonrası ayrı ayrı derlendi. `ProfileRoute`
+  ve `MainScaffold`'daki yeni parametreler diğer tüm callback'ler gibi
+  `= {}` varsayılanıyla eklendi — bu sayede Batch 2, Batch 3 uygulanmadan
+  önce de tek başına derlenebiliyordu (ara adımda kırık bir derleme riski
+  yok). `UNDER_REVIEW` ve ağ hatası durumları için yeni bir dialog türü
+  icat edilmedi, var olan `Effect.ShowToast` yeniden kullanıldı (kullanıcı
+  bu ikisi için "dialog/mesaj" ve "anlamlı mesaj" demişti, esnek bırakmıştı);
+  `APPROVED`/`REJECTED` ise özel içerik/aksiyon gerektirdiğinden State
+  tabanlı `AlertDialog` olarak `ProfileScreen.kt`'de (Route değil, Screen —
+  mvi-overview.md'nin "Screen tamamen State'ten render olur" kuralına uygun)
+  render edildi. "Onaylandın! 🎉" mesajındaki emoji, kullanıcının birebir
+  verdiği uygulama-içi metin olduğu için AYNEN kullanıldı — Agent.md §4'teki
+  emoji yasağının kendi raporlarım/planlarım için geçerli olduğu, kullanıcının
+  dikte ettiği UI metni için geçerli olmadığı yorumu kullanıcıya önceden
+  bildirilip itiraz gelmedi. `handleLicenseApproved()` içinde `loadProfile()`
+  çağrısı (kendi coroutine'ini fire-and-forget başlatan, suspend olmayan bir
+  fonksiyon) ile hemen ardından gelen `_state.update { isCheckingLicense =
+  false, licenseCheckDialog = Approved }` arasında race koşulu YOK —
+  `loadProfile()` yalnızca `isLoading`/`userName`/`phoneNumber`/
+  `referralCode`/`role`/`license` alanlarına dokunuyor, `isCheckingLicense`/
+  `licenseCheckDialog`'a hiç dokunmuyor.
+- **Kendi kontrolüm:** Üç batch'in her biri ayrı ayrı
+  `./gradlew :app:compileDebugKotlin` ile derlendi, üçünde de BUILD
+  SUCCESSFUL. Bağlı cihaz/emülatör olmadığından runtime'da DOĞRULANAMADI —
+  sonraki oturumda: (1) `PENDING`+ilk kez ehliyet gönderen bir hesapla
+  Selfie dialog'unun "Tamam"a kadar açık kaldığı ve sonra Home'a düştüğü;
+  (2) Profil'de `PENDING` hesapla "Kontrol Et" butonunun göründüğü; (3) bu
+  hesabın ehliyeti admin tarafından `UNDER_REVIEW`/`APPROVED`/`REJECTED`
+  yapılarak üç dalın da (mesaj / onay dialog'u + rozet güncellenmesi + buton
+  kaybolması / ret dialog'u + "Ehliyeti Yeniden Yükle" ile License ekranına
+  gidiş) doğru çalıştığı; (4) ağ bağlantısı kesikken "Kontrol Et"e basılınca
+  anlamlı bir mesaj gösterip butonun tekrar aktif kaldığı elle test
+  edilmeli.
+
+### 2026-07-19 — CurrentUserSession: Maps/History/Wallet artık PENDING→CUSTOMER geçişini yakalıyor (5 dosya)
+
+- **Ne yapıldı:** Profil'deki "Kontrol Et" ile CUSTOMER'a yükseltme
+  gerçekten başarılı oluyordu ama `MainScaffold.kt`'nin iç `NavHost`'u
+  `saveState/restoreState` kullandığından (`MainScaffold.kt:108-114`)
+  Maps/History/Wallet sekmelerinin ViewModel'leri sekmeler arası geçişte
+  YENİDEN KURULMUYOR — bu ekranlar PENDING rolüyle ilk açıldıklarında
+  `docs/api/openapi.json`'da belgeli 403 (`GET /vehicles`, `GET /rentals`,
+  `GET /wallet`, `GET /cards` hepsi "CUSTOMER olmayan kullanıcılar 403
+  alır" diyor) ile boş/hatalı kalıyor, rol sonradan CUSTOMER'a yükselse
+  bile bu ekranlara dönüldüğünde bayat kalmaya devam ediyordu (yalnızca
+  uygulamayı kapat-aç düzeltiyordu). Yeni `data/local/CurrentUserSession.kt`
+  (`TokenStore` emsaliyle `@Singleton @Inject constructor()`, tek alanı
+  `StateFlow<String?> role`) eklendi. `AuthRepository`'nin `register()`,
+  `verifyOtp()`, `refresh()` fonksiyonları başarılı her `AuthResponseDto`
+  alışında `currentUserSession.updateRole(result.data.user.role)` çağırıyor
+  (mevcut `tokenStore.saveTokens(...)` çağrısının yanına eklendi);
+  `logout()`'un `finally` bloğu da `tokenStore.clear()`'ın yanına
+  `currentUserSession.updateRole(null)` ekledi. `MapsViewModel`,
+  `HistoryViewModel`, `WalletViewModel`'in üçü de `currentUserSession`
+  inject edip `init` içinde `observeRoleChanges()` çağırıyor;
+  `lastKnownRole == "PENDING" && role == "CUSTOMER"` geçişini
+  yakaladıklarında sırasıyla `loadVehicles()`/`loadRentals()`/
+  `loadWalletAndCards()`'ı sessizce yeniden tetikliyorlar.
+- **Değişen dosyalar:** `data/local/CurrentUserSession.kt` (yeni),
+  `data/repository/AuthRepository.kt`, `feature/maps/MapsViewModel.kt`,
+  `feature/history/HistoryViewModel.kt`, `feature/wallet/WalletViewModel.kt`.
+- **Neden bu şekilde yapıldı:** Kullanıcı ilk talimatta yalnızca Maps'i
+  hedeflemiş, History/Wallet'ın "PENDING iken zaten erişilemez/boş
+  kalmadığı" varsayımıyla kapsam dışı bırakılabileceğini düşünmüştü; kod +
+  `docs/api/openapi.json` okunarak bu varsayım DOĞRULANAMADI (üçünün de
+  backend'i CUSTOMER'a kilitli, `errorMessage` state'inde sessizce
+  hata gösteriyorlar) — bu yüzden aynı düzeltme kullanıcı onayıyla üçüne
+  birden uygulandı (toplam 5 dosya, Agent.md §2.1 sınırı içinde tek
+  batch). `di/` altında ayrı bir modül YAZILMADI — `CurrentUserSession`,
+  `TokenStore`'un zaten kullandığı `@Singleton @Inject constructor()`
+  desenini izleyerek Hilt tarafından otomatik sağlanıyor. Geçiş algılama
+  yalnızca birebir `"PENDING" -> "CUSTOMER"` dizisini kontrol ediyor
+  (kullanıcının talimatındaki tanım); `getMe()` bilinçli olarak session'ı
+  güncellemiyor (talimat yalnızca login/verifyOtp/register/refresh'i
+  listelemişti, Profil zaten `refresh()` üzerinden bu akışa dahil).
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Bağlı cihaz/emülatör olmadığından runtime'da
+  DOĞRULANAMADI — sonraki oturumda: PENDING hesapla Maps/History/Wallet
+  sekmelerinde boş/hata durumunun oluştuğu, ardından Profil'de "Kontrol
+  Et" ile CUSTOMER'a yükseldikten sonra bu üç sekmeye (uygulamayı
+  kapatmadan) geri dönüldüğünde verinin otomatik yüklendiği elle test
+  edilmeli.

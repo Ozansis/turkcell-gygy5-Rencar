@@ -2,6 +2,7 @@ package com.turkcell.rencar_pair.feature.history
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.turkcell.rencar_pair.data.local.CurrentUserSession
 import com.turkcell.rencar_pair.data.network.dto.RentalResponseDto
 import com.turkcell.rencar_pair.data.repository.AuthResult
 import com.turkcell.rencar_pair.data.repository.RentalsRepository
@@ -12,6 +13,7 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +25,8 @@ private val DATE_LABEL_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm
 
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
-    private val rentalsRepository: RentalsRepository
+    private val rentalsRepository: RentalsRepository,
+    private val currentUserSession: CurrentUserSession
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HistoryContract.State())
@@ -32,8 +35,11 @@ class HistoryViewModel @Inject constructor(
     private val _effect = Channel<HistoryContract.Effect>(Channel.BUFFERED)
     val effect: Flow<HistoryContract.Effect> = _effect.receiveAsFlow()
 
+    private var lastKnownRole: String? = null
+
     init {
         loadRentals()
+        observeRoleChanges()
     }
 
     fun onIntent(intent: HistoryContract.Intent) {
@@ -58,6 +64,17 @@ class HistoryViewModel @Inject constructor(
                 is AuthResult.Error -> _state.update {
                     it.copy(isLoading = false, errorMessage = result.message)
                 }
+            }
+        }
+    }
+
+    private fun observeRoleChanges() {
+        viewModelScope.launch {
+            currentUserSession.role.collect { role ->
+                if (lastKnownRole == "PENDING" && role == "CUSTOMER") {
+                    loadRentals()
+                }
+                lastKnownRole = role
             }
         }
     }

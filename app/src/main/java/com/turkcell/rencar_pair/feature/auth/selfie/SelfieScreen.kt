@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -123,7 +125,32 @@ fun SelfieScreen(
 
             Spacer(Modifier.height(24.dp))
         }
+
+        if (state.showLicenseSubmittedDialog) {
+            LicenseSubmittedDialog(
+                onConfirm = { onIntent(SelfieContract.Intent.LicenseSubmittedDialogConfirmed) }
+            )
+        }
     }
+}
+
+@Composable
+private fun LicenseSubmittedDialog(onConfirm: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onConfirm,
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Tamam")
+            }
+        },
+        title = { Text("Ehliyetin gönderildi") },
+        text  = {
+            Text(
+                "Ehliyetin gönderildi, inceleniyor. Onay durumunu Profil sekmesinden " +
+                    "\"Kontrol Et\" ile takip edebilirsin."
+            )
+        }
+    )
 }
 
 @Composable

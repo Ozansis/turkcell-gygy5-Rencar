@@ -52,6 +52,7 @@ fun MainScaffold(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToHelp: () -> Unit = {},
     onNavigateToInvite: (String) -> Unit = {},
+    onNavigateToLicenseVerification: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {}
 ) {
     val navController = rememberNavController()
@@ -154,10 +155,11 @@ fun MainScaffold(
             composable(BottomNavItem.Listings.route) { WalletRoute() }
             composable(BottomNavItem.Profile.route)  {
                 ProfileRoute(
-                    onNavigateToSettings = onNavigateToSettings,
-                    onNavigateToHelp     = onNavigateToHelp,
-                    onNavigateToInvite   = onNavigateToInvite,
-                    onNavigateToLogin    = onNavigateToLogin
+                    onNavigateToSettings             = onNavigateToSettings,
+                    onNavigateToHelp                 = onNavigateToHelp,
+                    onNavigateToInvite               = onNavigateToInvite,
+                    onNavigateToLicenseVerification   = onNavigateToLicenseVerification,
+                    onNavigateToLogin                = onNavigateToLogin
                 )
             }
         }

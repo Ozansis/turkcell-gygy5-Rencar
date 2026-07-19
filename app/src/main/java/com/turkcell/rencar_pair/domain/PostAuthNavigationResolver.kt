@@ -28,7 +28,7 @@ class PostAuthNavigationResolver @Inject constructor(
         if (status !is AuthResult.Success) return PostAuthDestination.Home
 
         return if (status.data.status == "UNDER_REVIEW") {
-            PostAuthDestination.LicensePending
+            PostAuthDestination.Home
         } else {
             PostAuthDestination.LicenseUpload
         }

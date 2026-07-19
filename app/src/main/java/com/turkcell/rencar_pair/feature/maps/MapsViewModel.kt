@@ -2,6 +2,7 @@ package com.turkcell.rencar_pair.feature.maps
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.turkcell.rencar_pair.data.local.CurrentUserSession
 import com.turkcell.rencar_pair.data.network.dto.VehicleResponseDto
 import com.turkcell.rencar_pair.data.repository.AuthResult
 import com.turkcell.rencar_pair.data.repository.RentalsRepository
@@ -15,6 +16,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +31,8 @@ private const val HALF_TANK_THRESHOLD = 30.0
 @HiltViewModel
 class MapsViewModel @Inject constructor(
     private val vehiclesRepository: VehiclesRepository,
-    private val rentalsRepository: RentalsRepository
+    private val rentalsRepository: RentalsRepository,
+    private val currentUserSession: CurrentUserSession
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MapsContract.State())
@@ -38,9 +41,12 @@ class MapsViewModel @Inject constructor(
     private val _effect = Channel<MapsContract.Effect>(Channel.BUFFERED)
     val effect: Flow<MapsContract.Effect> = _effect.receiveAsFlow()
 
+    private var lastKnownRole: String? = null
+
     init {
         loadVehicles()
         loadActiveRental()
+        observeRoleChanges()
     }
 
     fun onIntent(intent: MapsContract.Intent) {
@@ -79,6 +85,17 @@ class MapsViewModel @Inject constructor(
                     }
                 }
                 is AuthResult.Error -> Unit // Aktif kiralama yoksa (404) sessizce yok say.
+            }
+        }
+    }
+
+    private fun observeRoleChanges() {
+        viewModelScope.launch {
+            currentUserSession.role.collect { role ->
+                if (lastKnownRole == "PENDING" && role == "CUSTOMER") {
+                    loadVehicles()
+                }
+                lastKnownRole = role
             }
         }
     }

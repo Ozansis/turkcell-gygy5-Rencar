@@ -25,8 +25,9 @@ class SelfieViewModel : ViewModel() {
             SelfieContract.Intent.CaptureSelfie          -> handleCaptureSelfie()
             is SelfieContract.Intent.SelfieImageSelected -> handleSelfieImageSelected(intent.uri)
             SelfieContract.Intent.Continue                -> handleContinue()
-            is SelfieContract.Intent.UploadStateChanged   -> handleUploadStateChanged(intent.isUploading, intent.isUploaded, intent.uploadError)
-            SelfieContract.Intent.NavigateBack            -> sendEffect(SelfieContract.Effect.NavigateBack)
+            is SelfieContract.Intent.UploadStateChanged        -> handleUploadStateChanged(intent.isUploading, intent.isUploaded, intent.uploadError)
+            SelfieContract.Intent.LicenseSubmittedDialogConfirmed -> handleLicenseSubmittedDialogConfirmed()
+            SelfieContract.Intent.NavigateBack                 -> sendEffect(SelfieContract.Effect.NavigateBack)
         }
     }
 
@@ -47,11 +48,16 @@ class SelfieViewModel : ViewModel() {
     private fun handleUploadStateChanged(isUploading: Boolean, isUploaded: Boolean, uploadError: String?) {
         _state.update { it.copy(isUploading = isUploading, uploadError = uploadError) }
         if (isUploaded) {
-            sendEffect(SelfieContract.Effect.NavigateToConfirmation)
+            _state.update { it.copy(showLicenseSubmittedDialog = true) }
         }
         if (uploadError != null) {
             sendEffect(SelfieContract.Effect.ShowError(uploadError))
         }
+    }
+
+    private fun handleLicenseSubmittedDialogConfirmed() {
+        _state.update { it.copy(showLicenseSubmittedDialog = false) }
+        sendEffect(SelfieContract.Effect.NavigateToHome)
     }
 
     private fun sendEffect(effect: SelfieContract.Effect) {
