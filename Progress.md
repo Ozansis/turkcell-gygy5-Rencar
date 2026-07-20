@@ -2873,3 +2873,58 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   başarılı dönüp aynı dialog "İyzico" etiketiyle açıldığı; (4) ödeme hatası
   dönerse (üç yöntemde de) dialog'un HİÇ açılmayıp mevcut `errorMessage`
   davranışının bozulmadığı elle test edilmeli.
+
+### 2026-07-20 — Repo köküne README.md eklendi
+
+- **Ne yapıldı:** Repo kökünde eksik olan README.md oluşturuldu: proje
+  tanıtımı, özellik listesi, `docs/screenshots/` altındaki 23 gerçek görselin
+  3 sütunlu tablo grid'i (GIF ayrı "Canlı Konum Takibi" başlığında),
+  `gradle/libs.versions.toml`'dan okunan gerçek sürüm numaralarıyla teknoloji
+  yığını tablosu, MVI mimarisi + paket yapısı + `docs/decisions.md`'deki
+  kararların (String enum, nav-graph-scoped ViewModel istisnası,
+  `PostAuthNavigationResolver`) özeti, kurulum adımları ve İyzico sandbox
+  test verileri.
+- **Değişen dosyalar:** `README.md` (yeni).
+- **Neden bu şekilde yapıldı:** Kullanıcı ekran görüntüsü dosya adlarının
+  UYDURULMAMASINI istemişti; bu yüzden `docs/screenshots/` gerçekten
+  listelendi (23 dosya) ve dört tanesi (`koyumod.jpeg`, `davetet.jpeg`,
+  `aracdurumu.jpeg`, `izyco.jpg`) anlamı dosya adından net çıkmadığı için
+  görsel olarak açılıp doğrulandı (sırasıyla: Ayarlar > Görünüm/koyu mod,
+  "Davet Et" referans ekranı, "Araç durumu" 4 yönlü teslim-öncesi fotoğraf
+  ekranı, İyzico sandbox kart formu) — kalan başlıklar dosya adından
+  doğrudan okunabildiği için ayrıca açılmadı. Sürüm numaraları
+  `gradle/libs.versions.toml`'dan birebir kopyalandı, tahmin edilmedi.
+  Backend adresi `di/NetworkModule.kt` ve `VehicleLocationSocketClient.kt`
+  içinde grep ile doğrulandı.
+- **Kendi kontrolüm:** Dosya adları docs/screenshots/ çıktısıyla, sürüm
+  numaraları libs.versions.toml içeriğiyle satır satır karşılaştırıldı;
+  markdown tablo/grid yapısı görsel olarak gözden geçirildi (kod
+  derlemesi/çalıştırma gerektiren bir değişiklik değil, yalnızca
+  dokümantasyon).
+
+### 2026-07-20 — docs/screenshots/ dosya adlarındaki Türkçe karakterler ASCII'ye çevrildi
+
+- **Ne yapıldı:** `docs/screenshots/` altında Türkçe karakter (ğ, ı) içeren
+  4 dosya ASCII karakterli adlara yeniden adlandırıldı:
+  `ehliyetdoğrulama.jpeg` → `ehliyetdogrulama.jpeg`,
+  `yardımdestek.jpeg` → `yardimdestek.jpeg`,
+  `yolculukdetayı.jpeg` → `yolculukdetayi.jpeg`,
+  `yolculuktamamlandı.jpeg` → `yolculuktamamlandi.jpeg`. README.md'deki
+  ilgili 4 `<img src="...">` yolu yeni dosya adlarıyla güncellendi.
+- **Değişen dosyalar:** `docs/screenshots/ehliyetdogrulama.jpeg` (yeniden adlandırıldı),
+  `docs/screenshots/yardimdestek.jpeg` (yeniden adlandırıldı),
+  `docs/screenshots/yolculukdetayi.jpeg` (yeniden adlandırıldı),
+  `docs/screenshots/yolculuktamamlandi.jpeg` (yeniden adlandırıldı),
+  `README.md`.
+- **Neden bu şekilde yapıldı:** Kullanıcı Türkçe karakterli dosya adlarının
+  bazı ortamlarda (URL encoding, farklı işletim sistemleri/araçlar) sorun
+  çıkarabileceğini düşünerek ASCII'ye çevrilmesini istedi. `docs/screenshots/`
+  klasörü henüz git tarafından takip edilmediğinden (`git status` çıktısında
+  `?? docs/screenshots/`) `git mv` kullanılamadı, düz `mv` ile yeniden
+  adlandırıldı. İlk taramada yalnızca 3 dosya tespit edilmişti;
+  `yolculuktamamlandı.jpeg`'in sonundaki `ı` karakteri gözden kaçmıştı, ikinci
+  bir kontrolde fark edilip aynı işleme dahil edildi.
+- **Kendi kontrolüm:** Yeniden adlandırma sonrası `docs/screenshots/`
+  klasörü listelenerek tüm dosya adlarının ASCII olduğu doğrulandı;
+  README.md'deki 4 satır, yeni dosya adlarıyla birebir eşleşecek şekilde
+  gözden geçirildi.
