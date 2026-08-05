@@ -11,6 +11,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+import kotlin.math.roundToInt
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
@@ -39,6 +40,7 @@ class HistoryViewModel @Inject constructor(
 
     init {
         loadRentals()
+        loadMonthlyStats()
         observeRoleChanges()
     }
 
@@ -68,11 +70,26 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
+    private fun loadMonthlyStats() {
+        viewModelScope.launch {
+            when (val result = rentalsRepository.getStats()) {
+                is AuthResult.Success -> _state.update {
+                    it.copy(
+                        monthlyTripCount = result.data.tripCount.roundToInt(),
+                        monthlySpending = result.data.totalSpent
+                    )
+                }
+                is AuthResult.Error -> Unit
+            }
+        }
+    }
+
     private fun observeRoleChanges() {
         viewModelScope.launch {
             currentUserSession.role.collect { role ->
                 if (lastKnownRole == "PENDING" && role == "CUSTOMER") {
                     loadRentals()
+                    loadMonthlyStats()
                 }
                 lastKnownRole = role
             }

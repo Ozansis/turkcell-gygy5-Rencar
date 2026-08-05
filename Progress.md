@@ -2979,10 +2979,10 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   `safeUnitCall`'a yönlendirildi (body != null kontrolü yapmıyor) — mevcut
   davranışlarıyla birebir aynı kalması için.
 - **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
-  BUILD SUCCESSFUL (yalnızca projede zaten var olan, bu değişiklikle
-  ilgisiz bir `@ApplicationContext` derleyici uyarısı). İlk denemede bir
-  edit `javax.inject.Singleton` import'unu iki kez eklemişti (RentalsRepository
-  zaten import ediyordu) — dosya tamamen yeniden yazılarak düzeltildi,
-  derleme bunu doğruladı. Kart ekleme/silme, kiralama listeleme, araç
-  listeleme ekranlarının davranışının önceki haliyle aynı kaldığı runtime'da
-  henüz elle test edilmedi.
+  BUILD SUCCESSFUL (Hilt/KSP grafiği `AuthInterceptor`'ın yeni
+  `CurrentUserSession` bağımlılığı ve `SessionViewModel` enjeksiyonuyla
+  birlikte sorunsuz üretildi; kalan uyarılar projede zaten var olan,
+  bu değişiklikle ilgisiz `@ApplicationContext` uyarıları). Runtime testi
+  (geçersiz bir refresh token ile korumalı bir uca istek atıp otomatik
+  login'e düşüldüğünün doğrulanması) henüz yapılmadı — kullanıcı tarafından
+  ayrıca doğrulanacak.
