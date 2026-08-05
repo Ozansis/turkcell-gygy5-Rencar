@@ -4,12 +4,11 @@ object HistoryContract {
 
     data class State(
         val rentals: List<RentalRecord> = emptyList(),
+        val monthlyTripCount: Int = 0,
+        val monthlySpending: Double = 0.0,
         val isLoading: Boolean = false,
         val errorMessage: String? = null
-    ) {
-        val monthlyTripCount: Int get() = rentals.size
-        val monthlySpending: Double get() = rentals.sumOf { it.totalPrice }
-    }
+    )
 
     sealed interface Intent {
         data class RentalSelected(val rentalId: String) : Intent
