@@ -2928,3 +2928,35 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   klasörü listelenerek tüm dosya adlarının ASCII olduğu doğrulandı;
   README.md'deki 4 satır, yeni dosya adlarıyla birebir eşleşecek şekilde
   gözden geçirildi.
+
+### 2026-08-05 — Ödev geri dönütü Batch 2/6: "Bu ay" etiketi gerçek stats ucuna bağlandı
+
+- **Ne yapıldı:** Dış geri dönütteki "stats ucu ölü kod, 'Bu ay' altında tüm
+  zamanlar toplanıyor" eksiği düzeltildi. `HistoryContract.State`'teki
+  `monthlyTripCount`/`monthlySpending` computed property'leri
+  (`rentals.size` / `rentals.sumOf { totalPrice }` — tarih filtresi
+  olmadan `listMine()`'ın döndürdüğü TÜM zamanların COMPLETED
+  kiralamalarını topluyordu) kaldırıldı; State'e gerçek verilerle
+  doldurulan sade alanlar eklendi. `HistoryViewModel`'e, backend'in zaten
+  "seçilen ay (varsayılan: bu ay, UTC)" özetini döndüren ama hiçbir yerden
+  çağrılmayan `GET rentals/stats` ucunu (`RentalsRepository.getStats()`,
+  parametresiz — backend varsayılanı zaten bu ay) çağıran `loadMonthlyStats()`
+  eklendi; `init` ve rol PENDING→CUSTOMER geçişinde `loadRentals()` ile
+  birlikte tetikleniyor.
+- **Değişen dosyalar:** `feature/history/HistoryContract.kt`,
+  `feature/history/HistoryViewModel.kt` (`fix/history-monthly-stats` branch'i)
+- **Neden bu şekilde yapıldı:** `HistoryScreen.kt`'ye hiç dokunulmadı —
+  zaten `state.monthlyTripCount`/`state.monthlySpending` okuyordu, isim ve
+  tip (Int/Double) aynı kaldığından ekran katmanında değişiklik gerekmedi.
+  `getStats()`'e ay parametresi kasıtlı olarak GEÇİLMEDİ:
+  `docs/api/openapi.json`'daki uç açıklaması "varsayılan: bu ay (UTC)" diyor
+  ve tasarımdaki "Bu ay 6 yolculuk · ₺612 harcama" başlığı da bu varsayılanı
+  bekliyor; istemci tarafında ayrıca `YearMonth.now()` hesaplamak gereksiz
+  tekrar olurdu. Hata durumunda (`AuthResult.Error`) state'e dokunulmuyor
+  (state'teki varsayılan 0/0.0 kalıyor) — `loadRentals()`'ın kendi
+  `errorMessage`'ı zaten kullanıcıya gösteriliyor, ikinci bir hata
+  göstermek gürültü olurdu.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL. Runtime testi (bu ay ve geçmiş aylardan kiralaması olan
+  bir kullanıcıyla "Bu ay" başlığının yalnızca bu ayı yansıttığının
+  doğrulanması) henüz yapılmadı — kullanıcı tarafından ayrıca doğrulanacak.
