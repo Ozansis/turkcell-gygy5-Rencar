@@ -2928,3 +2928,40 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   klasörü listelenerek tüm dosya adlarının ASCII olduğu doğrulandı;
   README.md'deki 4 satır, yeni dosya adlarıyla birebir eşleşecek şekilde
   gözden geçirildi.
+
+### 2026-08-05 — Ödev geri dönütü Batch 5/6: refresh başarısız olunca kullanıcı login'e düşürülüyor
+
+- **Ne yapıldı:** Dış geri dönütteki "refresh başarısızlığında kullanıcı
+  login'e düşürülmüyor" eksiği düzeltildi. `AuthInterceptor.refreshAccessToken`
+  (mutex/race koruması zaten güçlü yön olarak not edilmişti) `/auth/refresh`
+  başarısız dönünce sadece `null` döndürüp orijinal 401'i çağırana geri
+  veriyordu — token temizlenmiyor, hiçbir "oturum bitti" sinyali
+  yayınlanmıyordu. `CurrentUserSession`'a (zaten singleton) yeni bir
+  `sessionExpired: SharedFlow<Unit>` + `notifySessionExpired()` eklendi;
+  `AuthInterceptor` refresh başarısız olduğunda `tokenStore.clear()` çağırıp
+  bu sinyali yayınlıyor. `RenCarNavHost`, projede zaten her yerde kullanılan
+  `hiltViewModel()` kalıbına uygun ince bir `SessionViewModel` sarmalayıcısı
+  üzerinden bu akışı dinleyip `navigate(LOGIN) { popUpTo(0) { inclusive =
+  true } }` çağırıyor (mevcut `onNavigateToLogin`'deki kalıpla birebir aynı).
+- **Değişen/yeni dosyalar:** `data/local/CurrentUserSession.kt`,
+  `data/network/AuthInterceptor.kt`, `navigation/RenCarNavHost.kt`,
+  `navigation/SessionViewModel.kt` (yeni) (`fix/refresh-token-logout` branch'i)
+- **Neden bu şekilde yapıldı:** Projede Hilt'in `@EntryPoint`/
+  `EntryPointAccessors` API'si hiç kullanılmıyor (grep ile doğrulandı) —
+  bunun yerine her yerde `hiltViewModel()` + ViewModel deseni var. Bu yüzden
+  `CurrentUserSession`'ı (düz bir `@Singleton`, `ViewModel` değil) Compose
+  tarafına taşımak için MainActivity'ye alan enjeksiyonu ya da yeni bir
+  Hilt EntryPoint kurmak yerine, mevcut desenle tutarlı ince bir
+  `SessionViewModel` (tek satır: `sessionExpired` flow'unu dışarı veriyor)
+  tercih edildi — bu, planda "batch başında tekrar kontrol edilecek" olarak
+  bırakılan açık noktanın çözümü. `AuthInterceptor` senkron bir OkHttp
+  thread'inde çalıştığından `tokenStore.clear()` (suspend) `runBlocking`
+  içinde çağrıldı — dosyada zaten `refresh()` için aynı desen kullanılıyordu.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (Hilt/KSP grafiği `AuthInterceptor`'ın yeni
+  `CurrentUserSession` bağımlılığı ve `SessionViewModel` enjeksiyonuyla
+  birlikte sorunsuz üretildi; kalan uyarılar projede zaten var olan,
+  bu değişiklikle ilgisiz `@ApplicationContext` uyarıları). Runtime testi
+  (geçersiz bir refresh token ile korumalı bir uca istek atıp otomatik
+  login'e düşüldüğünün doğrulanması) henüz yapılmadı — kullanıcı tarafından
+  ayrıca doğrulanacak.
