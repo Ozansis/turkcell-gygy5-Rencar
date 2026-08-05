@@ -1,5 +1,6 @@
 package com.turkcell.rencar_pair.data.network
 
+import com.turkcell.rencar_pair.data.local.CurrentUserSession
 import com.turkcell.rencar_pair.data.local.TokenStore
 import com.turkcell.rencar_pair.data.repository.AuthRepository
 import com.turkcell.rencar_pair.data.repository.AuthResult
@@ -18,7 +19,8 @@ private val NO_AUTH_PATH_SUFFIXES = listOf(
 
 class AuthInterceptor @Inject constructor(
     private val tokenStore: TokenStore,
-    private val authRepositoryLazy: Lazy<AuthRepository>
+    private val authRepositoryLazy: Lazy<AuthRepository>,
+    private val currentUserSession: CurrentUserSession
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -55,6 +57,12 @@ class AuthInterceptor @Inject constructor(
             return currentToken
         }
         val result = runBlocking { authRepositoryLazy.get().refresh() }
-        return if (result is AuthResult.Success) tokenStore.accessToken else null
+        if (result is AuthResult.Success) return tokenStore.accessToken
+
+        // Refresh de başarısız oldu: oturum artık geçersiz, token'ları temizleyip
+        // uygulamanın kullanıcıyı login'e düşürmesi için sinyal yayınla.
+        runBlocking { tokenStore.clear() }
+        currentUserSession.notifySessionExpired()
+        return null
     }
 }
