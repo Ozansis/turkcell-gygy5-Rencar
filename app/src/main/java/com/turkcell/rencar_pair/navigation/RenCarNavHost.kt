@@ -1,6 +1,7 @@
 package com.turkcell.rencar_pair.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -64,6 +65,15 @@ private object RenCarDestinations {
 @Composable
 fun RenCarNavHost() {
     val navController = rememberNavController()
+    val sessionViewModel: SessionViewModel = hiltViewModel()
+
+    LaunchedEffect(Unit) {
+        sessionViewModel.sessionExpired.collect {
+            navController.navigate(RenCarDestinations.LOGIN) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
 
     NavHost(
         navController    = navController,

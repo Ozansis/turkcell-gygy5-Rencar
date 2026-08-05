@@ -2926,99 +2926,42 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   bir kontrolde fark edilip aynı işleme dahil edildi.
 - **Kendi kontrolüm:** Yeniden adlandırma sonrası `docs/screenshots/`
   klasörü listelenerek tüm dosya adlarının ASCII olduğu doğrulandı;
-  README.md'deki 4 satır, yeni dosya adlarıyla birebir eşleşecek şeki
-### 2026-08-05 — Ödev geri dönütü Batch 3/6: ortak safeCall + ilk 4 repository (1/2) **Ne yapıldı:** Dış geri dönütteki "~25 kez kopyalanan try/catch şablonu"
-  eksiğinin ilk yarısı çözüldü. `AuthRepository.kt`'de zaten var olan ama
-  `ivate` olduğu için sadece o sınıfa özel kalan `safeCall(...)` kalıbı,
-  paylaşımlı `SafeCall.kt` dosyasına (`internal suspend fun <T> safeCall(...)`
-  + 204/boş gövdeli uçlar için `internal suspend fun safeUnitCall(...)`)
-  taşındı. `AuthRepository`, `RentalsRepository` (11 metot), `CardsRepository`
-  (4 metot), `VehiclesRepository` (3 metot) artık bu ortak yardımcıyı
-  kullanıyor; toplam ~27 kopyadan 11'i bu batch'te tek satıra indi.
-- **Değişen dosyalar:** `data/repository/SafeCall.kt` (yeni),
-  `data/repository/AuthRepository.kt`, `data/repository/RentalsRepository.kt`,
-  `data/repository/CardsRepository.kt`, `data/repository/VehiclesRepository.kt`
-  (`fix/safe-call-part1` branch'i)
-- **Neden bu şekilde yapıldı:** `RentalsRepository.uploadPhoto`'da dikkat
-  edilmesi gereken bir ayrıntı vardı: `sideBody`/`filePart` oluşturma kodu
-  (içinde `IOException` fırlatabilen `uriToPart`) `safeCall`'ın try/catch'i
-  İÇİNDE kalacak şekilde lambda'nın içine taşındı — dışına alınsaydı fotoğraf
-  okuma hatası artık yakalanmayıp ViewModel'e patlardı, önceki davranış
-  (kullanıcıya "Bağlantı hatası..." mesajı) bozulurdu. `cancelRental`/
-  `deleteCard` gibi `Response<Unit>` döndüren uçlar bilinçli olarak
-  `safeUnitCall`'a yönlendirildi (body != null kontrolü yapmıyor) — mevcut
-  davranışlarıyla birebir aynı kalması için.
-- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
-  BUILD SUCCESSFUL (yalnızca projede zaten var olan, bu değişiklikle
-  ilgisiz bir `@ApplicationContext` derleyici uyarısı). İlk denemede bir
-  edit `javax.inject.Singleton` import'unu iki kez eklemişti (RentalsRepository
-  zaten import ediyordu) — dosya tamamen yeniden yazılarak düzeltildi,
-  derleme bunu doğruladı. Kart ekleme/silme, kiralama listeleme, araç
-  listeleme ekranlarının davranışının önceki haliyle aynı kaldığı runtime'da
-  henüz elle test edilmedi.
-### 2026-08-05 — Ödev geri dönütü Batch 2/6: "Bu ay" etiketi gerçek stats ucuna bağlandı
+  README.md'deki 4 satır, yeni dosya adlarıyla birebir eşleşecek şekilde
+  gözden geçirildi.
 
-- **Ne yapıldı:** Dış geri dönütteki "stats ucu ölü kod, 'Bu ay' altında tüm
-  zamanlar toplanıyor" eksiği düzeltildi. `HistoryContract.State`'teki
-  `monthlyTripCount`/`monthlySpending` computed property'leri
-  (`rentals.size` / `rentals.sumOf { totalPrice }` — tarih filtresi
-  olmadan `listMine()`'ın döndürdüğü TÜM zamanların COMPLETED
-  kiralamalarını topluyordu) kaldırıldı; State'e gerçek verilerle
-  doldurulan sade alanlar eklendi. `HistoryViewModel`'e, backend'in zaten
-  "seçilen ay (varsayılan: bu ay, UTC)" özetini döndüren ama hiçbir yerden
-  çağrılmayan `GET rentals/stats` ucunu (`RentalsRepository.getStats()`,
-  parametresiz — backend varsayılanı zaten bu ay) çağıran `loadMonthlyStats()`
-  eklendi; `init` ve rol PENDING→CUSTOMER geçişinde `loadRentals()` ile
-  birlikte tetikleniyor.
-- **Değişen dosyalar:** `feature/history/HistoryContract.kt`,
-  `feature/history/HistoryViewModel.kt` (`fix/history-monthly-stats` branch'i)
-- **Neden bu şekilde yapıldı:** `HistoryScreen.kt`'ye hiç dokunulmadı —
-  zaten `state.monthlyTripCount`/`state.monthlySpending` okuyordu, isim ve
-  tip (Int/Double) aynı kaldığından ekran katmanında değişiklik gerekmedi.
-  `getStats()`'e ay parametresi kasıtlı olarak GEÇİLMEDİ:
-  `docs/api/openapi.json`'daki uç açıklaması "varsayılan: bu ay (UTC)" diyor
-  ve tasarımdaki "Bu ay 6 yolculuk · ₺612 harcama" başlığı da bu varsayılanı
-  bekliyor; istemci tarafında ayrıca `YearMonth.now()` hesaplamak gereksiz
-  tekrar olurdu. Hata durumunda (`AuthResult.Error`) state'e dokunulmuyor
-  (state'teki varsayılan 0/0.0 kalıyor) — `loadRentals()`'ın kendi
-  `errorMessage`'ı zaten kullanıcıya gösteriliyor, ikinci bir hata
-  göstermek gürültü olurdu.
-- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
-  BUILD SUCCESSFUL. Runtime testi (bu ay ve geçmiş aylardan kiralaması olan
-  bir kullanıcıyla "Bu ay" başlığının yalnızca bu ayı yansıttığının
-  doğrulanması) henüz yapılmadı — kullanıcı tarafından ayrıca doğrulanacak.
-=======
-### 2026-08-05 — Ödev geri dönütü Batch 1/6: Confirmation ekranı navigasyona geri bağlandı
+### 2026-08-05 — Ödev geri dönütü Batch 5/6: refresh başarısız olunca kullanıcı login'e düşürülüyor
 
-- **Ne yapıldı:** Teslim edilen ödeve gelen dış geri dönütteki 5 eksik
-  (hold gerçek değil, stats ölü kod, refresh başarısızlığında login'e
-  düşürülmüyor, Confirmation erişilemez, ~25 kopya try/catch) önce üç
-  paralel taramayla projede tam olarak nerede olduğu doğrulandı, sonra
-  `Agent.md` §2.1 dosya limiti gereği 6 ayrı onaylı batch'e (her biri kendi
-  branch'inde) bölündü. Bu girdi 1/6: `domain/PostAuthNavigationResolver.kt`
-  içinde `UNDER_REVIEW` lisans durumu `PostAuthDestination.Home` yerine
-  `PostAuthDestination.LicensePending` döndürecek şekilde düzeltildi
-  (commit `3ba6372` ile kazara ezilmiş tek satırlık bir regresyon —
-  `git show` ile doğrulandı). Bu sayede `RenCarNavHost.kt`'deki kayıtlı
-  `CONFIRMATION` route'u (`ConfirmationScreen` — lisans durumunu polling ile
-  izleyen tam işlevsel bir ekran) artık Splash/Register/Otp akışlarından
-  fiilen erişilebilir hale geldi.
-- **Değişen dosyalar:** `app/src/main/java/com/turkcell/rencar_pair/domain/PostAuthNavigationResolver.kt`
-  (`fix/confirmation-navigation` branch'i)
-- **Neden bu şekilde yapıldı:** Alternatif olarak orphan kalan
-  `ConfirmationScreen`/`ConfirmationRoute`/`ConfirmationViewModel` dosyalarını
-  tamamen silmek de düşünülebilirdi, ama ekran (polling, onay/red durumları,
-  yeniden yükleme akışı) tam işlevsel ve tasarımla uyumlu olduğundan; asıl
-  sorun ekranın kendisi değil, ona giden tek koşulun (resolver'ın
-  `LicensePending` döndürmesi) kırık olmasıydı — en küçük, en doğru düzeltme
-  bu satırı eski haline getirmekti. `ProfileViewModel`'deki "Kontrol Et"
-  akışıyla çakışma yok: o, kullanıcı Confirmation'dan ayrılıp sonradan
-  Profile'dan tekrar kontrol etmek isterse devreye giren ayrı bir yol.
-- **Kendi kontrolüm:** Ortamda Gradle daemon'ın yanlış bir JRE (VS Code
-  Java eklentisinin JRE'si, jlink içermiyor) ile başladığı fark edildi;
-  daemon durdurulup `JAVA_HOME=C:\Users\hozan\.jdks\ms-21.0.8` ile yeniden
-  başlatıldı (proje dosyalarına dokunulmadı, sadece ortam sorunuydu — sonraki
-  batch'lerde aynı JDK kullanılacak). `./gradlew :app:assembleDebug` bu JDK
-  ile BUILD SUCCESSFUL verdi. Runtime/UI testi (yeni kayıt → OTP → lisans
-  yükle → UNDER_REVIEW durumunda otomatik Confirmation'a düşme) henüz
-  yapılmadı — kullanıcı tarafından ayrıca
+- **Ne yapıldı:** Dış geri dönütteki "refresh başarısızlığında kullanıcı
+  login'e düşürülmüyor" eksiği düzeltildi. `AuthInterceptor.refreshAccessToken`
+  (mutex/race koruması zaten güçlü yön olarak not edilmişti) `/auth/refresh`
+  başarısız dönünce sadece `null` döndürüp orijinal 401'i çağırana geri
+  veriyordu — token temizlenmiyor, hiçbir "oturum bitti" sinyali
+  yayınlanmıyordu. `CurrentUserSession`'a (zaten singleton) yeni bir
+  `sessionExpired: SharedFlow<Unit>` + `notifySessionExpired()` eklendi;
+  `AuthInterceptor` refresh başarısız olduğunda `tokenStore.clear()` çağırıp
+  bu sinyali yayınlıyor. `RenCarNavHost`, projede zaten her yerde kullanılan
+  `hiltViewModel()` kalıbına uygun ince bir `SessionViewModel` sarmalayıcısı
+  üzerinden bu akışı dinleyip `navigate(LOGIN) { popUpTo(0) { inclusive =
+  true } }` çağırıyor (mevcut `onNavigateToLogin`'deki kalıpla birebir aynı).
+- **Değişen/yeni dosyalar:** `data/local/CurrentUserSession.kt`,
+  `data/network/AuthInterceptor.kt`, `navigation/RenCarNavHost.kt`,
+  `navigation/SessionViewModel.kt` (yeni) (`fix/refresh-token-logout` branch'i)
+- **Neden bu şekilde yapıldı:** Projede Hilt'in `@EntryPoint`/
+  `EntryPointAccessors` API'si hiç kullanılmıyor (grep ile doğrulandı) —
+  bunun yerine her yerde `hiltViewModel()` + ViewModel deseni var. Bu yüzden
+  `CurrentUserSession`'ı (düz bir `@Singleton`, `ViewModel` değil) Compose
+  tarafına taşımak için MainActivity'ye alan enjeksiyonu ya da yeni bir
+  Hilt EntryPoint kurmak yerine, mevcut desenle tutarlı ince bir
+  `SessionViewModel` (tek satır: `sessionExpired` flow'unu dışarı veriyor)
+  tercih edildi — bu, planda "batch başında tekrar kontrol edilecek" olarak
+  bırakılan açık noktanın çözümü. `AuthInterceptor` senkron bir OkHttp
+  thread'inde çalıştığından `tokenStore.clear()` (suspend) `runBlocking`
+  içinde çağrıldı — dosyada zaten `refresh()` için aynı desen kullanılıyordu.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (Hilt/KSP grafiği `AuthInterceptor`'ın yeni
+  `CurrentUserSession` bağımlılığı ve `SessionViewModel` enjeksiyonuyla
+  birlikte sorunsuz üretildi; kalan uyarılar projede zaten var olan,
+  bu değişiklikle ilgisiz `@ApplicationContext` uyarıları). Runtime testi
+  (geçersiz bir refresh token ile korumalı bir uca istek atıp otomatik
+  login'e düşüldüğünün doğrulanması) henüz yapılmadı — kullanıcı tarafından
+  ayrıca doğrulanacak.
