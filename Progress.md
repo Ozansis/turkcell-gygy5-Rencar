@@ -2926,9 +2926,36 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   bir kontrolde fark edilip aynı işleme dahil edildi.
 - **Kendi kontrolüm:** Yeniden adlandırma sonrası `docs/screenshots/`
   klasörü listelenerek tüm dosya adlarının ASCII olduğu doğrulandı;
-  README.md'deki 4 satır, yeni dosya adlarıyla birebir eşleşecek şekilde
-  gözden geçirildi.
-
+  README.md'deki 4 satır, yeni dosya adlarıyla birebir eşleşecek şeki
+### 2026-08-05 — Ödev geri dönütü Batch 3/6: ortak safeCall + ilk 4 repository (1/2) **Ne yapıldı:** Dış geri dönütteki "~25 kez kopyalanan try/catch şablonu"
+  eksiğinin ilk yarısı çözüldü. `AuthRepository.kt`'de zaten var olan ama
+  `ivate` olduğu için sadece o sınıfa özel kalan `safeCall(...)` kalıbı,
+  paylaşımlı `SafeCall.kt` dosyasına (`internal suspend fun <T> safeCall(...)`
+  + 204/boş gövdeli uçlar için `internal suspend fun safeUnitCall(...)`)
+  taşındı. `AuthRepository`, `RentalsRepository` (11 metot), `CardsRepository`
+  (4 metot), `VehiclesRepository` (3 metot) artık bu ortak yardımcıyı
+  kullanıyor; toplam ~27 kopyadan 11'i bu batch'te tek satıra indi.
+- **Değişen dosyalar:** `data/repository/SafeCall.kt` (yeni),
+  `data/repository/AuthRepository.kt`, `data/repository/RentalsRepository.kt`,
+  `data/repository/CardsRepository.kt`, `data/repository/VehiclesRepository.kt`
+  (`fix/safe-call-part1` branch'i)
+- **Neden bu şekilde yapıldı:** `RentalsRepository.uploadPhoto`'da dikkat
+  edilmesi gereken bir ayrıntı vardı: `sideBody`/`filePart` oluşturma kodu
+  (içinde `IOException` fırlatabilen `uriToPart`) `safeCall`'ın try/catch'i
+  İÇİNDE kalacak şekilde lambda'nın içine taşındı — dışına alınsaydı fotoğraf
+  okuma hatası artık yakalanmayıp ViewModel'e patlardı, önceki davranış
+  (kullanıcıya "Bağlantı hatası..." mesajı) bozulurdu. `cancelRental`/
+  `deleteCard` gibi `Response<Unit>` döndüren uçlar bilinçli olarak
+  `safeUnitCall`'a yönlendirildi (body != null kontrolü yapmıyor) — mevcut
+  davranışlarıyla birebir aynı kalması için.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (yalnızca projede zaten var olan, bu değişiklikle
+  ilgisiz bir `@ApplicationContext` derleyici uyarısı). İlk denemede bir
+  edit `javax.inject.Singleton` import'unu iki kez eklemişti (RentalsRepository
+  zaten import ediyordu) — dosya tamamen yeniden yazılarak düzeltildi,
+  derleme bunu doğruladı. Kart ekleme/silme, kiralama listeleme, araç
+  listeleme ekranlarının davranışının önceki haliyle aynı kaldığı runtime'da
+  henüz elle test edilmedi.
 ### 2026-08-05 — Ödev geri dönütü Batch 2/6: "Bu ay" etiketi gerçek stats ucuna bağlandı
 
 - **Ne yapıldı:** Dış geri dönütteki "stats ucu ölü kod, 'Bu ay' altında tüm
@@ -2994,4 +3021,4 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   batch'lerde aynı JDK kullanılacak). `./gradlew :app:assembleDebug` bu JDK
   ile BUILD SUCCESSFUL verdi. Runtime/UI testi (yeni kayıt → OTP → lisans
   yükle → UNDER_REVIEW durumunda otomatik Confirmation'a düşme) henüz
-  yapılmadı — kullanıcı tarafından ayrıca d
+  yapılmadı — kullanıcı tarafından ayrıca

@@ -26,165 +26,47 @@ class RentalsRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    suspend fun createRental(vehicleId: String, plan: String, endDate: String? = null): AuthResult<RentalResponseDto> {
-        return try {
-            val response = rentalsApiService.createRental(CreateRentalDto(vehicleId, plan, endDate))
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
+    suspend fun createRental(vehicleId: String, plan: String, endDate: String? = null): AuthResult<RentalResponseDto> =
+        safeCall { rentalsApiService.createRental(CreateRentalDto(vehicleId, plan, endDate)) }
 
-    suspend fun listMine(): AuthResult<List<RentalResponseDto>> {
-        return try {
-            val response = rentalsApiService.listMine()
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
+    suspend fun listMine(): AuthResult<List<RentalResponseDto>> =
+        safeCall { rentalsApiService.listMine() }
 
-    suspend fun getRental(id: String): AuthResult<RentalResponseDto> {
-        return try {
-            val response = rentalsApiService.getRental(id)
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
+    suspend fun getRental(id: String): AuthResult<RentalResponseDto> =
+        safeCall { rentalsApiService.getRental(id) }
 
-    suspend fun getStats(month: String? = null): AuthResult<RentalStatsResponseDto> {
-        return try {
-            val response = rentalsApiService.getStats(month)
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
+    suspend fun getStats(month: String? = null): AuthResult<RentalStatsResponseDto> =
+        safeCall { rentalsApiService.getStats(month) }
 
-    suspend fun getActiveRental(): AuthResult<ActiveRentalResponseDto> {
-        return try {
-            val response = rentalsApiService.getActiveRental()
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
+    suspend fun getActiveRental(): AuthResult<ActiveRentalResponseDto> =
+        safeCall { rentalsApiService.getActiveRental() }
 
-    suspend fun finishRental(id: String): AuthResult<RentalResponseDto> {
-        return try {
-            val response = rentalsApiService.finishRental(id)
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
+    suspend fun finishRental(id: String): AuthResult<RentalResponseDto> =
+        safeCall { rentalsApiService.finishRental(id) }
 
     suspend fun payRental(
         id: String,
         method: String,
         cardId: String? = null,
         iyzicoPaymentId: String? = null
-    ): AuthResult<PayRentalResponseDto> {
-        return try {
-            val response = rentalsApiService.payRental(id, PayRentalDto(method, cardId, iyzicoPaymentId))
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
+    ): AuthResult<PayRentalResponseDto> =
+        safeCall { rentalsApiService.payRental(id, PayRentalDto(method, cardId, iyzicoPaymentId)) }
 
-    suspend fun cancelRental(id: String): AuthResult<Unit> {
-        return try {
-            val response = rentalsApiService.cancelRental(id)
-            if (response.isSuccessful) {
-                AuthResult.Success(Unit)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
+    suspend fun cancelRental(id: String): AuthResult<Unit> =
+        safeUnitCall { rentalsApiService.cancelRental(id) }
 
-    suspend fun uploadPhoto(rentalId: String, side: String, imageUri: Uri): AuthResult<RentalPhotosStateDto> {
-        return try {
+    suspend fun uploadPhoto(rentalId: String, side: String, imageUri: Uri): AuthResult<RentalPhotosStateDto> =
+        safeCall {
             val sideBody = side.toRequestBody("text/plain".toMediaTypeOrNull())
             val filePart = uriToPart(imageUri)
-            val response = rentalsApiService.uploadPhoto(rentalId, sideBody, filePart)
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
+            rentalsApiService.uploadPhoto(rentalId, sideBody, filePart)
         }
-    }
 
-    suspend fun getPhotos(rentalId: String): AuthResult<RentalPhotosStateDto> {
-        return try {
-            val response = rentalsApiService.getPhotos(rentalId)
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
+    suspend fun getPhotos(rentalId: String): AuthResult<RentalPhotosStateDto> =
+        safeCall { rentalsApiService.getPhotos(rentalId) }
 
-    suspend fun startRental(rentalId: String): AuthResult<RentalResponseDto> {
-        return try {
-            val response = rentalsApiService.startRental(rentalId)
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
+    suspend fun startRental(rentalId: String): AuthResult<RentalResponseDto> =
+        safeCall { rentalsApiService.startRental(rentalId) }
 
     private suspend fun uriToPart(uri: Uri): MultipartBody.Part =
         withContext(Dispatchers.IO) {
