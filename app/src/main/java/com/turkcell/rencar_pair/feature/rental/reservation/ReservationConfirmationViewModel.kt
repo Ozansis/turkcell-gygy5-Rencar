@@ -13,7 +13,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,6 +43,8 @@ class ReservationConfirmationViewModel @AssistedInject constructor(
     private val _effect = Channel<ReservationConfirmationContract.Effect>(Channel.BUFFERED)
     val effect: Flow<ReservationConfirmationContract.Effect> = _effect.receiveAsFlow()
 
+    private var countdownJob: Job? = null
+
     init {
         loadVehicle()
         loadQuote(ReservationConfirmationContract.RentalPlan.PER_MINUTE)
@@ -51,7 +55,7 @@ class ReservationConfirmationViewModel @AssistedInject constructor(
             is ReservationConfirmationContract.Intent.PlanSelected            -> handlePlanSelected(intent.plan)
             ReservationConfirmationContract.Intent.TermsToggled               -> handleTermsToggled()
             ReservationConfirmationContract.Intent.CompleteReservationClicked -> handleCompleteReservationClicked()
-            ReservationConfirmationContract.Intent.NavigateBack               -> sendEffect(ReservationConfirmationContract.Effect.NavigateBack)
+            ReservationConfirmationContract.Intent.NavigateBack               -> handleNavigateBack()
         }
     }
 
@@ -119,14 +123,23 @@ class ReservationConfirmationViewModel @AssistedInject constructor(
         val current = _state.value
         if (!current.canComplete) return
         _state.update { it.copy(isSubmitting = true) }
+        if (current.reservationId != null) {
+            // Hold zaten alınmış (önceki kiralama denemesi başarısız oldu); yeniden rezervasyon açmaya gerek yok.
+            viewModelScope.launch { proceedToRental(current.selectedPlan) }
+            return
+        }
         viewModelScope.launch {
             when (val reservationResult = reservationsRepository.createReservation(vehicleId)) {
                 is AuthResult.Success -> {
-                    if (current.selectedPlan == ReservationConfirmationContract.RentalPlan.DAILY) {
-                        createDailyRental()
-                    } else {
-                        createUsageRental(current.selectedPlan)
+                    val reservation = reservationResult.data
+                    _state.update {
+                        it.copy(
+                            reservationId = reservation.id,
+                            remainingHoldSeconds = reservation.remainingSeconds.roundToInt()
+                        )
                     }
+                    startCountdown(reservation.remainingSeconds.roundToInt())
+                    proceedToRental(current.selectedPlan)
                 }
                 is AuthResult.Error -> {
                     _state.update { it.copy(isSubmitting = false) }
@@ -136,10 +149,19 @@ class ReservationConfirmationViewModel @AssistedInject constructor(
         }
     }
 
+    private suspend fun proceedToRental(plan: ReservationConfirmationContract.RentalPlan) {
+        if (plan == ReservationConfirmationContract.RentalPlan.DAILY) {
+            createDailyRental()
+        } else {
+            createUsageRental(plan)
+        }
+    }
+
     private suspend fun createDailyRental() {
         val endDate = Instant.now().plus(1, ChronoUnit.DAYS).toString()
         when (val rentalResult = rentalsRepository.createRental(vehicleId, "DAILY", endDate)) {
             is AuthResult.Success -> {
+                markHoldConsumed()
                 _state.update { it.copy(isSubmitting = false) }
                 sendEffect(ReservationConfirmationContract.Effect.NavigateToActiveRental(rentalResult.data.id))
             }
@@ -153,6 +175,7 @@ class ReservationConfirmationViewModel @AssistedInject constructor(
     private suspend fun createUsageRental(plan: ReservationConfirmationContract.RentalPlan) {
         when (val rentalResult = rentalsRepository.createRental(vehicleId, plan.name)) {
             is AuthResult.Success -> {
+                markHoldConsumed()
                 _state.update { it.copy(isSubmitting = false) }
                 sendEffect(ReservationConfirmationContract.Effect.NavigateToVehiclePhotos(rentalResult.data.id, vehicleId))
             }
@@ -160,6 +183,46 @@ class ReservationConfirmationViewModel @AssistedInject constructor(
                 _state.update { it.copy(isSubmitting = false) }
                 sendEffect(ReservationConfirmationContract.Effect.ShowError(rentalResult.message))
             }
+        }
+    }
+
+    private fun markHoldConsumed() {
+        countdownJob?.cancel()
+        _state.update { it.copy(reservationId = null) }
+    }
+
+    private fun startCountdown(initialSeconds: Int) {
+        countdownJob?.cancel()
+        countdownJob = viewModelScope.launch {
+            var remaining = initialSeconds
+            while (remaining > 0) {
+                delay(1000)
+                remaining -= 1
+                _state.update { it.copy(remainingHoldSeconds = remaining) }
+            }
+            handleHoldExpired()
+        }
+    }
+
+    private suspend fun handleHoldExpired() {
+        val reservationId = _state.value.reservationId ?: return
+        reservationsRepository.cancelReservation(reservationId)
+        _state.update { it.copy(reservationId = null, isSubmitting = false) }
+        sendEffect(ReservationConfirmationContract.Effect.ShowError("Rezervasyon süresi doldu, lütfen tekrar deneyin."))
+        sendEffect(ReservationConfirmationContract.Effect.NavigateBack)
+    }
+
+    private fun handleNavigateBack() {
+        val reservationId = _state.value.reservationId
+        if (reservationId == null) {
+            sendEffect(ReservationConfirmationContract.Effect.NavigateBack)
+            return
+        }
+        countdownJob?.cancel()
+        viewModelScope.launch {
+            reservationsRepository.cancelReservation(reservationId)
+            _state.update { it.copy(reservationId = null) }
+            sendEffect(ReservationConfirmationContract.Effect.NavigateBack)
         }
     }
 

@@ -3,6 +3,7 @@ package com.turkcell.rencar_pair.feature.rental.reservation
 object ReservationConfirmationContract {
 
     const val PREVIEW_MINUTES = 30
+    const val RESERVATION_HOLD_SECONDS = 15 * 60
 
     enum class RentalPlan { PER_MINUTE, HOURLY, DAILY }
 
@@ -24,7 +25,9 @@ object ReservationConfirmationContract {
         val isTermsAccepted: Boolean = false,
         val isLoadingVehicle: Boolean = false,
         val isLoadingQuote: Boolean = false,
-        val isSubmitting: Boolean = false
+        val isSubmitting: Boolean = false,
+        val reservationId: String? = null,
+        val remainingHoldSeconds: Int = RESERVATION_HOLD_SECONDS
     ) {
         val canComplete: Boolean get() = isTermsAccepted && !isSubmitting && !isLoadingQuote
         val formattedPricePerMinute: String get() = "₺${"%.2f".format(pricePerMinute).replace('.', ',')}/dk"
@@ -32,6 +35,7 @@ object ReservationConfirmationContract {
         val formattedPricePerDay: String get() = "₺${pricePerDay.toInt()}"
         val formattedStartFee: String get() = "₺${"%.2f".format(startFee).replace('.', ',')}"
         val formattedEstimatedTotal: String get() = "~₺${"%.2f".format(estimatedTotal).replace('.', ',')}"
+        val formattedRemainingHoldTime: String get() = "%d:%02d".format(remainingHoldSeconds / 60, remainingHoldSeconds % 60)
     }
 
     sealed interface Intent {

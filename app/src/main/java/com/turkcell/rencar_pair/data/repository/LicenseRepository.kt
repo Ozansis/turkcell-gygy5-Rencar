@@ -21,37 +21,17 @@ class LicenseRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    suspend fun upload(front: Uri, back: Uri, selfie: Uri): AuthResult<LicenseResponseDto> {
-        return try {
-            val response = licenseApiService.upload(
+    suspend fun upload(front: Uri, back: Uri, selfie: Uri): AuthResult<LicenseResponseDto> =
+        safeCall {
+            licenseApiService.upload(
                 uriToPart("front", front),
                 uriToPart("back", back),
                 uriToPart("selfie", selfie)
             )
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
         }
-    }
 
-    suspend fun getStatus(): AuthResult<LicenseStatusResponseDto> {
-        return try {
-            val response = licenseApiService.status()
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
+    suspend fun getStatus(): AuthResult<LicenseStatusResponseDto> =
+        safeCall { licenseApiService.status() }
 
     private suspend fun uriToPart(partName: String, uri: Uri): MultipartBody.Part =
         withContext(Dispatchers.IO) {

@@ -2929,34 +2929,55 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   README.md'deki 4 satır, yeni dosya adlarıyla birebir eşleşecek şekilde
   gözden geçirildi.
 
-### 2026-08-05 — Ödev geri dönütü Batch 5/6: refresh başarısız olunca kullanıcı login'e düşürülüyor
+### 2026-08-05 — Ödev geri dönütü Batch 4/6: ortak safeCall + kalan 4 repository (2/2)
 
-- **Ne yapıldı:** Dış geri dönütteki "refresh başarısızlığında kullanıcı
-  login'e düşürülmüyor" eksiği düzeltildi. `AuthInterceptor.refreshAccessToken`
-  (mutex/race koruması zaten güçlü yön olarak not edilmişti) `/auth/refresh`
-  başarısız dönünce sadece `null` döndürüp orijinal 401'i çağırana geri
-  veriyordu — token temizlenmiyor, hiçbir "oturum bitti" sinyali
-  yayınlanmıyordu. `CurrentUserSession`'a (zaten singleton) yeni bir
-  `sessionExpired: SharedFlow<Unit>` + `notifySessionExpired()` eklendi;
-  `AuthInterceptor` refresh başarısız olduğunda `tokenStore.clear()` çağırıp
-  bu sinyali yayınlıyor. `RenCarNavHost`, projede zaten her yerde kullanılan
-  `hiltViewModel()` kalıbına uygun ince bir `SessionViewModel` sarmalayıcısı
-  üzerinden bu akışı dinleyip `navigate(LOGIN) { popUpTo(0) { inclusive =
-  true } }` çağırıyor (mevcut `onNavigateToLogin`'deki kalıpla birebir aynı).
-- **Değişen/yeni dosyalar:** `data/local/CurrentUserSession.kt`,
-  `data/network/AuthInterceptor.kt`, `navigation/RenCarNavHost.kt`,
-  `navigation/SessionViewModel.kt` (yeni) (`fix/refresh-token-logout` branch'i)
-- **Neden bu şekilde yapıldı:** Projede Hilt'in `@EntryPoint`/
-  `EntryPointAccessors` API'si hiç kullanılmıyor (grep ile doğrulandı) —
-  bunun yerine her yerde `hiltViewModel()` + ViewModel deseni var. Bu yüzden
-  `CurrentUserSession`'ı (düz bir `@Singleton`, `ViewModel` değil) Compose
-  tarafına taşımak için MainActivity'ye alan enjeksiyonu ya da yeni bir
-  Hilt EntryPoint kurmak yerine, mevcut desenle tutarlı ince bir
-  `SessionViewModel` (tek satır: `sessionExpired` flow'unu dışarı veriyor)
-  tercih edildi — bu, planda "batch başında tekrar kontrol edilecek" olarak
-  bırakılan açık noktanın çözümü. `AuthInterceptor` senkron bir OkHttp
-  thread'inde çalıştığından `tokenStore.clear()` (suspend) `runBlocking`
-  içinde çağrıldı — dosyada zaten `refresh()` için aynı desen kullanılıyordu.
+- **Ne yapıldı:** Batch 3'te kurulan paylaşımlı `safeCall`/`safeUnitCall`
+  yardımcıları, kalan 4 repository'ye de uygulandı: `IyzicoRepository` (2
+  metot), `LicenseRepository` (2 metot — `upload`'daki çoklu `uriToPart`
+  çağrısı `safeCall`'ın lambda'sı içinde kaldı), `WalletRepository` (2
+  metot), `ReservationsRepository` (1 metot — `createReservation`).
+  ~27 kopya try/catch bloğunun tamamı böylece tek merkezi implementasyona
+  (`SafeCall.kt`) indirgenmiş oldu.
+- **Değişen dosyalar:** `data/repository/IyzicoRepository.kt`,
+  `data/repository/LicenseRepository.kt`, `data/repository/WalletRepository.kt`,
+  `data/repository/ReservationsRepository.kt` (`fix/safe-call-part2` branch'i,
+  `fix/safe-call-part1` üzerine kurulu — main'e alınırken önce part1 merge
+  edilmeli)
+- **Neden bu şekilde yapıldı:** `ReservationsRepository`'ye kasıtlı olarak
+  başka bir şey eklenmedi (sadece mevcut `createReservation` taşındı) —
+  ödev geri dönütündeki "15 dk hold gerçek değil" eksiğini çözecek yeni
+  `cancelReservation`/`getActiveReservation` metotları ayrı bir batch'e
+  (Batch 6) bırakıldı, böylece o batch baştan bu ortak yardımcıyı kullanarak
+  yazılacak ve tekrar iş çıkmayacak.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (yalnızca projede zaten var olan bir `@ApplicationContext`
+  derleyici uyarısı). Iyzico ödeme, ehliyet durumu, cüzdan, rezervasyon
+  oluşturma ekranlarının davranışının önceki haliyle aynı kaldığı runtime'da
+  henüz elle test edilmedi.
+
+### 2026-08-05 — Ödev geri dönütü Batch 3/6: ortak safeCall + ilk 4 repository (1/2)
+
+- **Ne yapıldı:** Dış geri dönütteki "~25 kez kopyalanan try/catch şablonu"
+  eksiğinin ilk yarısı çözüldü. `AuthRepository.kt`'de zaten var olan ama
+  `private` olduğu için sadece o sınıfa özel kalan `safeCall(...)` kalıbı,
+  paylaşımlı `SafeCall.kt` dosyasına (`internal suspend fun <T> safeCall(...)`
+  + 204/boş gövdeli uçlar için `internal suspend fun safeUnitCall(...)`)
+  taşındı. `AuthRepository`, `RentalsRepository` (11 metot), `CardsRepository`
+  (4 metot), `VehiclesRepository` (3 metot) artık bu ortak yardımcıyı
+  kullanıyor; toplam ~27 kopyadan 11'i bu batch'te tek satıra indi.
+- **Değişen dosyalar:** `data/repository/SafeCall.kt` (yeni),
+  `data/repository/AuthRepository.kt`, `data/repository/RentalsRepository.kt`,
+  `data/repository/CardsRepository.kt`, `data/repository/VehiclesRepository.kt`
+  (`fix/safe-call-part1` branch'i)
+- **Neden bu şekilde yapıldı:** `RentalsRepository.uploadPhoto`'da dikkat
+  edilmesi gereken bir ayrıntı vardı: `sideBody`/`filePart` oluşturma kodu
+  (içinde `IOException` fırlatabilen `uriToPart`) `safeCall`'ın try/catch'i
+  İÇİNDE kalacak şekilde lambda'nın içine taşındı — dışına alınsaydı fotoğraf
+  okuma hatası artık yakalanmayıp ViewModel'e patlardı, önceki davranış
+  (kullanıcıya "Bağlantı hatası..." mesajı) bozulurdu. `cancelRental`/
+  `deleteCard` gibi `Response<Unit>` döndüren uçlar bilinçli olarak
+  `safeUnitCall`'a yönlendirildi (body != null kontrolü yapmıyor) — mevcut
+  davranışlarıyla birebir aynı kalması için.
 - **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
   BUILD SUCCESSFUL (Hilt/KSP grafiği `AuthInterceptor`'ın yeni
   `CurrentUserSession` bağımlılığı ve `SessionViewModel` enjeksiyonuyla
