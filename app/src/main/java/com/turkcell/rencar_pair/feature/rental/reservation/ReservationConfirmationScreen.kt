@@ -1,5 +1,6 @@
 package com.turkcell.rencar_pair.feature.rental.reservation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,6 +43,8 @@ fun ReservationConfirmationScreen(
     onIntent: (ReservationConfirmationContract.Intent) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    BackHandler(onBack = { onIntent(ReservationConfirmationContract.Intent.NavigateBack) })
+
     Column(modifier = modifier.fillMaxSize().systemBarsPadding()) {
         TopBar(onBack = { onIntent(ReservationConfirmationContract.Intent.NavigateBack) })
 
@@ -257,7 +260,10 @@ private fun FeeBreakdownCard(state: ReservationConfirmationContract.State) {
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            FeeRow(label = "Ücretsiz rezervasyon", value = "15 dk")
+            FeeRow(
+                label = if (state.reservationId != null) "Rezervasyon süresi" else "Ücretsiz rezervasyon",
+                value = if (state.reservationId != null) state.formattedRemainingHoldTime else "15 dk"
+            )
             Spacer(Modifier.height(10.dp))
             if (state.isLoadingQuote) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

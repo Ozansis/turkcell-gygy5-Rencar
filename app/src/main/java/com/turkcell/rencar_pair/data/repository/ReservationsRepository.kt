@@ -13,4 +13,7 @@ class ReservationsRepository @Inject constructor(
 
     suspend fun createReservation(vehicleId: String): AuthResult<ReservationResponseDto> =
         safeCall { reservationsApiService.createReservation(CreateReservationDto(vehicleId)) }
+
+    suspend fun cancelReservation(id: String): AuthResult<Unit> =
+        safeUnitCall { reservationsApiService.cancelReservation(id) }
 }
