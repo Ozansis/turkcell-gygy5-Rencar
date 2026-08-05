@@ -108,18 +108,4 @@ class AuthRepository @Inject constructor(
     }
 
     suspend fun getMe(): AuthResult<UserResponseDto> = safeCall { authApiService.me() }
-
-    private suspend fun <T> safeCall(call: suspend () -> Response<T>): AuthResult<T> {
-        return try {
-            val response = call()
-            val body = response.body()
-            if (response.isSuccessful && body != null) {
-                AuthResult.Success(body)
-            } else {
-                AuthResult.Error(response.code(), response.extractErrorMessage())
-            }
-        } catch (e: IOException) {
-            AuthResult.Error(code = null, message = "Bağlantı hatası, lütfen tekrar deneyin.")
-        }
-    }
 }
