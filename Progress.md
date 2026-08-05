@@ -2929,6 +2929,32 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   README.md'deki 4 satır, yeni dosya adlarıyla birebir eşleşecek şekilde
   gözden geçirildi.
 
+### 2026-08-05 — Ödev geri dönütü Batch 4/6: ortak safeCall + kalan 4 repository (2/2)
+
+- **Ne yapıldı:** Batch 3'te kurulan paylaşımlı `safeCall`/`safeUnitCall`
+  yardımcıları, kalan 4 repository'ye de uygulandı: `IyzicoRepository` (2
+  metot), `LicenseRepository` (2 metot — `upload`'daki çoklu `uriToPart`
+  çağrısı `safeCall`'ın lambda'sı içinde kaldı), `WalletRepository` (2
+  metot), `ReservationsRepository` (1 metot — `createReservation`).
+  ~27 kopya try/catch bloğunun tamamı böylece tek merkezi implementasyona
+  (`SafeCall.kt`) indirgenmiş oldu.
+- **Değişen dosyalar:** `data/repository/IyzicoRepository.kt`,
+  `data/repository/LicenseRepository.kt`, `data/repository/WalletRepository.kt`,
+  `data/repository/ReservationsRepository.kt` (`fix/safe-call-part2` branch'i,
+  `fix/safe-call-part1` üzerine kurulu — main'e alınırken önce part1 merge
+  edilmeli)
+- **Neden bu şekilde yapıldı:** `ReservationsRepository`'ye kasıtlı olarak
+  başka bir şey eklenmedi (sadece mevcut `createReservation` taşındı) —
+  ödev geri dönütündeki "15 dk hold gerçek değil" eksiğini çözecek yeni
+  `cancelReservation`/`getActiveReservation` metotları ayrı bir batch'e
+  (Batch 6) bırakıldı, böylece o batch baştan bu ortak yardımcıyı kullanarak
+  yazılacak ve tekrar iş çıkmayacak.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (yalnızca projede zaten var olan bir `@ApplicationContext`
+  derleyici uyarısı). Iyzico ödeme, ehliyet durumu, cüzdan, rezervasyon
+  oluşturma ekranlarının davranışının önceki haliyle aynı kaldığı runtime'da
+  henüz elle test edilmedi.
+
 ### 2026-08-05 — Ödev geri dönütü Batch 3/6: ortak safeCall + ilk 4 repository (1/2)
 
 - **Ne yapıldı:** Dış geri dönütteki "~25 kez kopyalanan try/catch şablonu"
