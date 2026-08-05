@@ -2928,3 +2928,38 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   klasörü listelenerek tüm dosya adlarının ASCII olduğu doğrulandı;
   README.md'deki 4 satır, yeni dosya adlarıyla birebir eşleşecek şekilde
   gözden geçirildi.
+
+### 2026-08-05 — Ödev geri dönütü Batch 1/6: Confirmation ekranı navigasyona geri bağlandı
+
+- **Ne yapıldı:** Teslim edilen ödeve gelen dış geri dönütteki 5 eksik
+  (hold gerçek değil, stats ölü kod, refresh başarısızlığında login'e
+  düşürülmüyor, Confirmation erişilemez, ~25 kopya try/catch) önce üç
+  paralel taramayla projede tam olarak nerede olduğu doğrulandı, sonra
+  `Agent.md` §2.1 dosya limiti gereği 6 ayrı onaylı batch'e (her biri kendi
+  branch'inde) bölündü. Bu girdi 1/6: `domain/PostAuthNavigationResolver.kt`
+  içinde `UNDER_REVIEW` lisans durumu `PostAuthDestination.Home` yerine
+  `PostAuthDestination.LicensePending` döndürecek şekilde düzeltildi
+  (commit `3ba6372` ile kazara ezilmiş tek satırlık bir regresyon —
+  `git show` ile doğrulandı). Bu sayede `RenCarNavHost.kt`'deki kayıtlı
+  `CONFIRMATION` route'u (`ConfirmationScreen` — lisans durumunu polling ile
+  izleyen tam işlevsel bir ekran) artık Splash/Register/Otp akışlarından
+  fiilen erişilebilir hale geldi.
+- **Değişen dosyalar:** `app/src/main/java/com/turkcell/rencar_pair/domain/PostAuthNavigationResolver.kt`
+  (`fix/confirmation-navigation` branch'i)
+- **Neden bu şekilde yapıldı:** Alternatif olarak orphan kalan
+  `ConfirmationScreen`/`ConfirmationRoute`/`ConfirmationViewModel` dosyalarını
+  tamamen silmek de düşünülebilirdi, ama ekran (polling, onay/red durumları,
+  yeniden yükleme akışı) tam işlevsel ve tasarımla uyumlu olduğundan; asıl
+  sorun ekranın kendisi değil, ona giden tek koşulun (resolver'ın
+  `LicensePending` döndürmesi) kırık olmasıydı — en küçük, en doğru düzeltme
+  bu satırı eski haline getirmekti. `ProfileViewModel`'deki "Kontrol Et"
+  akışıyla çakışma yok: o, kullanıcı Confirmation'dan ayrılıp sonradan
+  Profile'dan tekrar kontrol etmek isterse devreye giren ayrı bir yol.
+- **Kendi kontrolüm:** Ortamda Gradle daemon'ın yanlış bir JRE (VS Code
+  Java eklentisinin JRE'si, jlink içermiyor) ile başladığı fark edildi;
+  daemon durdurulup `JAVA_HOME=C:\Users\hozan\.jdks\ms-21.0.8` ile yeniden
+  başlatıldı (proje dosyalarına dokunulmadı, sadece ortam sorunuydu — sonraki
+  batch'lerde aynı JDK kullanılacak). `./gradlew :app:assembleDebug` bu JDK
+  ile BUILD SUCCESSFUL verdi. Runtime/UI testi (yeni kayıt → OTP → lisans
+  yükle → UNDER_REVIEW durumunda otomatik Confirmation'a düşme) henüz
+  yapılmadı — kullanıcı tarafından ayrıca doğrulanacak.
