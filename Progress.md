@@ -2929,6 +2929,71 @@ loadVehicles()` ile BİREBİR AYNI `isLoading` + `AuthResult` `when` deseniyle `
   README.md'deki 4 satır, yeni dosya adlarıyla birebir eşleşecek şekilde
   gözden geçirildi.
 
+### 2026-08-06 — Ödev geri dönütü Batch 6/6 (son): 15 dk rezervasyon hold'u gerçek hale getirildi
+
+- **Ne yapıldı:** Dış geri dönütteki son eksik ("15 dk hold fiilen
+  yaşanmıyor — iptal/aktif-rezervasyon uçları hiç bağlanmamış") çözüldü.
+  Backend `POST /reservations`'ın döndürdüğü `expiresAt`/`remainingSeconds`
+  hiç okunmuyordu, `ReservationConfirmationViewModel` rezervasyon
+  oluşturur oluşturmaz aynı anda kiralamayı da başlatıyordu (hold penceresi
+  fiilen hiç yaşanmıyordu), `DELETE /reservations/{id}` istemci tarafında
+  hiç tanımlı değildi. Şimdi: `ReservationsApiService`/`ReservationsRepository`'ye
+  `cancelReservation` eklendi; `ReservationConfirmationViewModel`,
+  rezervasyon yanıtındaki `remainingSeconds`'tan saniyede bir azalan canlı
+  bir geri sayım başlatıyor (`State.reservationId` + `remainingHoldSeconds`);
+  kullanıcı geri gider (TopBar veya artık yeni eklenen `BackHandler` ile
+  yakalanan sistem geri tuşu/gesture) ya da süre dolarsa `cancelReservation`
+  çağrılıp araç anında boşa çıkıyor; kiralama başarıyla oluşturulunca hold
+  "tüketilmiş" sayılıp countdown iptal ediliyor (gereksiz cancel çağrısı
+  yapılmıyor). `FeeBreakdownCard`'daki statik "15 dk" metni canlı geri
+  sayımla değişti.
+- **Değişen dosyalar:** `data/network/ReservationsApiService.kt`,
+  `data/repository/ReservationsRepository.kt`,
+  `feature/rental/reservation/ReservationConfirmationContract.kt`,
+  `feature/rental/reservation/ReservationConfirmationViewModel.kt`,
+  `feature/rental/reservation/ReservationConfirmationScreen.kt`
+  (`fix/reservation-hold` branch'i, `fix/safe-call-part2` üzerine kurulu —
+  main'e alınırken önce `fix/safe-call-part1` → `fix/safe-call-part2` sırayla
+  merge edilmiş olmalı, çünkü `cancelReservation` Batch 3/4'te kurulan
+  paylaşımlı `safeUnitCall`'ı kullanıyor)
+- **Neden bu şekilde yapıldı:** `GET /reservations/active` bilinçli olarak
+  kapsam dışı bırakıldı (kullanıcı onayıyla) — process-death sonrası hold
+  kurtarma ayrı bir iyileştirme, bu batch'in odağı "kullanıcı akışı
+  içindeyken hold'un gerçekten 15 dk'lık bir pencere olması ve iptalin
+  fiilen çalışması" idi. Projede daha önce hiç `BackHandler` kullanılmamıştı
+  (grep ile doğrulandı) — sistem geri tuşu/gesture'ı, Navigation-Compose'un
+  varsayılan davranışıyla ViewModel'e hiç uğramadan doğrudan
+  `popBackStack()` yapardı; bu da TopBar'daki geri ikonuyla aynı iptal
+  mantığından geçmesini engellerdi. Bu yüzden `ReservationConfirmationScreen`'e
+  `BackHandler(onBack = { onIntent(NavigateBack) })` eklenerek her iki geri
+  yolu da (buton + sistem) tek bir `handleNavigateBack()` akışına
+  birleştirildi — MVI kuralına uygun (Screen hâlâ stateless, sadece
+  `onIntent` çağırıyor). Rezervasyon oluşturma başarılı ama kiralama
+  oluşturma (`createRental`) ağ hatasıyla başarısız olursa hold bilinçli
+  olarak İPTAL EDİLMİYOR — kullanıcı "Rezervasyonu Tamamla"ya tekrar
+  bastığında `reservationId` zaten dolu olduğundan yeni bir rezervasyon
+  açmadan (backend zaten 409 döndürürdü) kalan süreyle kiralamayı tekrar
+  denemesi sağlanıyor.
+- **Kendi kontrolüm:** `./gradlew :app:compileDebugKotlin` ile derlendi,
+  BUILD SUCCESSFUL (yalnızca projede zaten var olan, bu değişiklikle
+  ilgisiz `@ApplicationContext`/`Icons.Filled.List` uyarıları). Runtime
+  testi (bir araç rezerve edip geri sayımın azaldığının, geri tuşuyla
+  aracın anında `AVAILABLE`'a döndüğünün, süre dolunca hata gösterilip
+  ekrandan çıkarıldığının doğrulanması) henüz yapılmadı — kullanıcı
+  tarafından ayrıca doğrulanacak.
+
+### 2026-08-06 — Ödev geri dönütü tamamlandı: 6 batch, 6 ayrı branch
+
+Dış geri dönütte bildirilen 5 eksiğin (confirmation erişilemez, stats ölü
+kod, refresh→login yönlendirmesi yok, hold gerçek değil, ~25 kopya
+try/catch) tamamı 6 ayrı branch'e (`fix/confirmation-navigation`,
+`fix/history-monthly-stats`, `fix/safe-call-part1`, `fix/safe-call-part2`,
+`fix/refresh-token-logout`, `fix/reservation-hold`) bölünerek çözüldü ve
+push edildi; merge işlemi kullanıcı tarafından yapılacak (bağımlılık
+sırası: `fix/safe-call-part1` → `fix/safe-call-part2` → `fix/reservation-hold`,
+diğer üçü main'den bağımsız). Ayrıntılar için yukarıdaki Batch 1-6
+girdilerine bakınız.
+
 ### 2026-08-05 — Ödev geri dönütü Batch 4/6: ortak safeCall + kalan 4 repository (2/2)
 
 - **Ne yapıldı:** Batch 3'te kurulan paylaşımlı `safeCall`/`safeUnitCall`
